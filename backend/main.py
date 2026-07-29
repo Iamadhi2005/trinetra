@@ -1,7 +1,10 @@
 import asyncio
 import os
 import uvicorn
-from fastapi import FastAPI
+import math
+import time
+import random
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database import Base, engine, SessionLocal
 from backend.models import User, Patient, Device, MLModelRecord, Setting, AuditLog
@@ -106,6 +109,99 @@ async def simulator_background_loop():
         except Exception:
             pass
         await asyncio.sleep(1.0)
+
+def generate_pqrst_ecg_point(t_ms: int, bpm: int = 75) -> float:
+    """Generates a clinically realistic ECG signal voltage (in mV) at time t_ms.
+    bpm: Beats Per Minute, determines the cardiac cycle period.
+    """
+    period = 60000 / bpm
+    phase = (t_ms % period) / period
+    
+    val = 0.0
+    
+    # Atrial depolarization
+    if 0.1 <= phase <= 0.2:
+        p_phase = (phase - 0.1) / 0.1
+        val += 0.15 * math.sin(p_phase * math.pi)
+    # Q-wave
+    elif 0.22 <= phase <= 0.24:
+        q_phase = (phase - 0.22) / 0.02
+        val -= 0.2 * math.sin(q_phase * math.pi)
+    # R-wave spike
+    elif 0.24 < phase <= 0.28:
+        r_phase = (phase - 0.24) / 0.04
+        val += 1.6 * math.sin(r_phase * math.pi)
+    # S-wave
+    elif 0.28 < phase <= 0.32:
+        s_phase = (phase - 0.28) / 0.04
+        val -= 0.45 * math.sin(s_phase * math.pi)
+    # T-wave
+    elif 0.45 <= phase <= 0.65:
+        t_phase = (phase - 0.45) / 0.20
+        val += 0.35 * math.sin(t_phase * math.pi)
+        
+    val += random.uniform(-0.02, 0.02)
+    return val
+
+@app.websocket("/ws/telemetry/{patient_id}")
+async def websocket_telemetry(websocket: WebSocket, patient_id: str):
+    await websocket.accept()
+    
+    db = SessionLocal()
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    db.close()
+    
+    if not patient:
+        await websocket.close(code=4004)
+        return
+        
+    t_ms = 0
+    try:
+        while True:
+            p_dev = global_simulator_service.simulator.patients.get(patient_id)
+            if not p_dev:
+                hr = 75.0
+                spo2 = 98.2
+                infusion = 5.0
+                battery = 100.0
+                status = "Online"
+            else:
+                hr = p_dev.heart_rate
+                spo2 = p_dev.spo2
+                infusion = p_dev.infusion_rate
+                battery = p_dev.battery
+                status = p_dev.status
+                
+            ecg_val = generate_pqrst_ecg_point(t_ms, int(hr))
+            
+            systolic = int(115 + (hr - 70) * 0.5 + random.uniform(-2, 2))
+            diastolic = int(75 + (hr - 70) * 0.3 + random.uniform(-1, 1))
+            bp = f"{systolic}/{diastolic}"
+            
+            temp = round(36.5 + (hr - 70) * 0.02 + random.uniform(-0.1, 0.1), 1)
+            resp = int(12 + (hr - 70) * 0.1 + random.randint(-1, 1))
+            
+            payload = {
+                "ecg_voltage": round(ecg_val, 3),
+                "heart_rate": int(hr),
+                "spo2": round(spo2, 1),
+                "blood_pressure": bp,
+                "temperature": temp,
+                "respiration_rate": max(8, min(30, resp)),
+                "infusion_level": round(infusion, 1),
+                "battery": int(battery),
+                "status": status,
+                "timestamp": time.time()
+            }
+            
+            await websocket.send_json(payload)
+            t_ms += 20
+            await asyncio.sleep(0.02)
+            
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
 
 @app.on_event("startup")
 async def on_startup():

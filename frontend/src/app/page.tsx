@@ -8,22 +8,15 @@ import {
   Users,
   AlertTriangle,
   ShieldCheck,
-  Clock,
   Heart,
   Droplet,
   Zap,
   Wifi,
   Cpu,
+  Monitor,
+  HeartPulse,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import Link from "next/link";
 
 interface DashboardData {
   active_devices: number;
@@ -39,22 +32,22 @@ interface Patient {
   id: string;
   name: string;
   status: string;
+  ward_number: string;
+  bed_number: string;
+  is_calibrated: boolean;
 }
 
-interface VitalPoint {
-  time: string;
+interface LiveVitalSummary {
+  patient_id: string;
+  name: string;
   heart_rate: number;
   spo2: number;
+  status: string;
+  is_calibrated: boolean;
 }
 
 export default function DashboardPage() {
-  const [selectedPatientId, setSelectedPatientId] = useState<string>("");
-  const [vitalStream, setVitalStream] = useState<VitalPoint[]>([]);
-  const [currentVitals, setCurrentVitals] = useState({
-    heart_rate: 75,
-    spo2: 98,
-    infusion_rate: 5.0,
-  });
+  const [liveVitals, setLiveVitals] = useState<Record<string, LiveVitalSummary>>({});
 
   // Fetch Dashboard Metrics
   const { data: metrics, isLoading: isMetricsLoading } = useQuery<DashboardData>({
@@ -69,322 +62,212 @@ export default function DashboardPage() {
     queryFn: () => fetchApi<Patient[]>("/patients"),
   });
 
+  // Maintain list of active WebSockets for all calibrated patients to render the central ICU telemetry panel!
   useEffect(() => {
-    if (patients.length > 0 && !selectedPatientId) {
-      setSelectedPatientId(patients[0].id);
-    }
-  }, [patients, selectedPatientId]);
+    if (patients.length === 0) return;
 
-  // Live Vitals Streaming for Selected Patient
-  useEffect(() => {
-    if (!selectedPatientId) return;
+    const sockets: Record<string, WebSocket> = {};
 
-    const fetchVitals = async () => {
-      try {
-        const data = await fetchApi<any>(`/patients/${selectedPatientId}/vitals`);
-        setCurrentVitals({
-          heart_rate: data.heart_rate,
-          spo2: data.spo2,
-          infusion_rate: data.infusion_rate,
-        });
+    patients.forEach((p) => {
+      if (!p.is_calibrated) return;
 
-        const timeLabel = new Date().toLocaleTimeString("en-US", {
-          hour12: false,
-          minute: "2-digit",
-          second: "2-digit",
-        });
+      const ws = new WebSocket(`ws://localhost:8000/ws/telemetry/${p.id}`);
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        setLiveVitals((prev) => ({
+          ...prev,
+          [p.id]: {
+            patient_id: p.id,
+            name: p.name,
+            heart_rate: data.heart_rate,
+            spo2: data.spo2,
+            status: data.status,
+            is_calibrated: true,
+          },
+        }));
+      };
+      sockets[p.id] = ws;
+    });
 
-        setVitalStream((prev) => {
-          const next = [
-            ...prev,
-            {
-              time: timeLabel,
-              heart_rate: Number(data.heart_rate.toFixed(1)),
-              spo2: Number(data.spo2.toFixed(1)),
-            },
-          ];
-          return next.slice(-20); // Keep last 20 points
-        });
-      } catch (err) {}
+    return () => {
+      Object.values(sockets).forEach((ws) => ws.close());
     };
+  }, [patients]);
 
-    fetchVitals();
-    const interval = setInterval(fetchVitals, 1000);
-    return () => clearInterval(interval);
-  }, [selectedPatientId]);
+  const activeMonitoringCount = Object.values(liveVitals).filter(v => v.is_calibrated).length;
+  const criticalPatientsCount = Object.values(liveVitals).filter(v => v.heart_rate > 100 || v.heart_rate < 55 || v.spo2 < 93).length;
 
   return (
     <div className="space-y-6">
-      {/* Top 5 KPI Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Card 1: Active Devices */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-[#718096] uppercase tracking-wider">
-              Active Devices
-            </span>
-            <Activity className="w-4 h-4 text-[#002855]" />
-          </div>
-          <div className="text-2xl font-bold text-[#0F172A] mt-2">
-            {isMetricsLoading ? "--" : metrics?.active_devices}
-          </div>
-          <div className="text-xs text-[#2ECC71] font-semibold mt-1">
-            All Connected
-          </div>
+      {/* Central Monitor Header Banner */}
+      <div className="bg-[#002855] text-white p-4 rounded-lg flex items-center justify-between shadow-sm border border-[#1A3F6B]">
+        <div>
+          <h1 className="text-base font-bold uppercase tracking-wider flex items-center gap-2">
+            <Monitor className="w-5 h-5 text-[#3498DB] animate-pulse" /> ICU Central Monitoring Station
+          </h1>
+          <p className="text-[11px] text-[#A0AEC0] uppercase tracking-widest mt-0.5">
+            Real-time Clinical Telemetry Gate & Network Integrity Guard
+          </p>
         </div>
-
-        {/* Card 2: Patients Monitored */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-[#718096] uppercase tracking-wider">
-              Patients Monitored
-            </span>
-            <Users className="w-4 h-4 text-[#3498DB]" />
-          </div>
-          <div className="text-2xl font-bold text-[#0F172A] mt-2">
-            {isMetricsLoading ? "--" : metrics?.patients_count}
-          </div>
-          <div className="text-xs text-[#3498DB] font-semibold mt-1">
-            In Care
-          </div>
-        </div>
-
-        {/* Card 3: Active Alerts */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-[#718096] uppercase tracking-wider">
-              Active Alerts
-            </span>
-            <AlertTriangle
-              className={`w-4 h-4 ${
-                (metrics?.active_alerts_count || 0) > 0
-                  ? "text-[#EC7063]"
-                  : "text-[#718096]"
-              }`}
-            />
-          </div>
-          <div
-            className={`text-2xl font-bold mt-2 ${
-              (metrics?.active_alerts_count || 0) > 0
-                ? "text-[#EC7063]"
-                : "text-[#0F172A]"
-            }`}
-          >
-            {isMetricsLoading ? "--" : metrics?.active_alerts_count}
-          </div>
-          <div
-            className={`text-xs font-semibold mt-1 ${
-              (metrics?.active_alerts_count || 0) > 0
-                ? "text-[#EC7063]"
-                : "text-[#718096]"
-            }`}
-          >
-            {(metrics?.active_alerts_count || 0) > 0
-              ? "Action Required"
-              : "No Alerts"}
-          </div>
-        </div>
-
-        {/* Card 4: Attacks Today */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-[#718096] uppercase tracking-wider">
-              Attacks Intercepted
-            </span>
-            <ShieldCheck className="w-4 h-4 text-[#2ECC71]" />
-          </div>
-          <div className="text-2xl font-bold text-[#0F172A] mt-2">
-            {isMetricsLoading ? "--" : metrics?.attacks_today}
-          </div>
-          <div className="text-xs text-[#2ECC71] font-semibold mt-1">
-            Hard Blocked
-          </div>
-        </div>
-
-        {/* Card 5: System Uptime */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-[#718096] uppercase tracking-wider">
-              System Uptime
-            </span>
-            <Clock className="w-4 h-4 text-[#2ECC71]" />
-          </div>
-          <div className="text-2xl font-bold text-[#0F172A] mt-2">
-            {metrics?.uptime || "18h 42m"}
-          </div>
-          <div className="text-xs text-[#2ECC71] font-semibold mt-1">
-            Continuous
-          </div>
+        <div className="text-xs font-semibold bg-[#001D40] px-3 py-1 rounded border border-[#1A3F6B] text-[#2ECC71]">
+          ● SYSTEM RUNNING SMOOTHLY
         </div>
       </div>
 
-      {/* Main Grid Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Column 1: Patient Vitals Stream (Recharts) */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-[#002855] text-sm uppercase tracking-wide">
-              Patient Vitals (Live)
-            </h2>
-            {patients.length > 0 ? (
-              <select
-                value={selectedPatientId}
-                onChange={(e) => setSelectedPatientId(e.target.value)}
-                className="text-xs bg-[#F8FAFC] border border-[#CBD5E0] rounded px-2 py-1 text-[#1A202C] font-medium"
-              >
-                {patients.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.id})
-                  </option>
-                ))}
-              </select>
-            ) : null}
+      {/* Clinical KPI Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+        {/* Total Admitted */}
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">
+            Total Patients
           </div>
-
-          {patients.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-xs text-[#A0AEC0] border border-dashed border-[#CBD5E0] rounded-md">
-              No patients registered in backend database.
-            </div>
-          ) : (
-            <>
-              <div className="h-[180px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={vitalStream}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" />
-                    <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-                    <YAxis domain={[50, 130]} tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Line
-                      type="monotone"
-                      dataKey="heart_rate"
-                      stroke="#2ECC71"
-                      strokeWidth={2}
-                      dot={false}
-                      name="Heart Rate (bpm)"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="spo2"
-                      stroke="#3498DB"
-                      strokeWidth={2}
-                      dot={false}
-                      name="SpO2 (%)"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Vitals Summary Card */}
-              <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded p-3 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[#4A5568] font-semibold">
-                    <Heart className="w-3.5 h-3.5 text-[#2ECC71]" /> HEART RATE:
-                  </span>
-                  <span className="font-bold text-[#0F172A]">
-                    {currentVitals.heart_rate.toFixed(1)} bpm
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[#4A5568] font-semibold">
-                    <Droplet className="w-3.5 h-3.5 text-[#3498DB]" /> SpO2:
-                  </span>
-                  <span className="font-bold text-[#0F172A]">
-                    {currentVitals.spo2.toFixed(1)} %
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[#4A5568] font-semibold">
-                    <Zap className="w-3.5 h-3.5 text-[#9B59B6]" /> INFUSION PUMP:
-                  </span>
-                  <span className="font-bold text-[#0F172A]">
-                    {currentVitals.infusion_rate.toFixed(1)} mL/h
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
+          <div className="text-xl font-bold text-[#0F172A] mt-1">
+            {isMetricsLoading ? "--" : metrics?.patients_count}
+          </div>
+          <div className="text-[10px] text-[#718096] mt-1">Admitted Registry</div>
         </div>
 
-        {/* Column 2: Security Status & Gauge */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 shadow-sm space-y-4">
-          <h2 className="font-bold text-[#002855] text-sm uppercase tracking-wide">
-            Security Status
-          </h2>
-
-          <div className="text-center py-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
-            <div className="text-4xl mb-1">
-              {(metrics?.active_alerts_count || 0) > 0 ? "🛡️" : "💚"}
-            </div>
-            <div className="text-xs font-semibold text-[#718096] uppercase tracking-wider">
-              Threat Level
-            </div>
-            <div
-              className={`text-2xl font-bold ${
-                (metrics?.active_alerts_count || 0) > 0
-                  ? "text-[#EC7063]"
-                  : "text-[#2ECC71]"
-              }`}
-            >
-              {metrics?.threat_level || "LOW"}
-            </div>
-            <p className="text-[11px] text-[#718096] mt-0.5">
-              {(metrics?.active_alerts_count || 0) > 0
-                ? "Active Quarantine Isolation"
-                : "System is Secure"}
-            </p>
+        {/* Connected Nodes */}
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">
+            Connected Devices
           </div>
-
-          <div className="text-xs space-y-2 pt-2">
-            <div className="flex justify-between border-b border-[#F0F0F0] pb-1.5">
-              <span className="text-[#4A5568]">IDS Monitor:</span>
-              <span className="font-semibold text-[#2ECC71]">Active</span>
-            </div>
-            <div className="flex justify-between border-b border-[#F0F0F0] pb-1.5">
-              <span className="text-[#4A5568]">IPS Active Prevention:</span>
-              <span className="font-semibold text-[#2ECC71]">Ready</span>
-            </div>
-            <div className="flex justify-between border-b border-[#F0F0F0] pb-1.5">
-              <span className="text-[#4A5568]">HMAC Cryptographic Verification:</span>
-              <span className="font-semibold text-[#2ECC71]">All Valid</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[#4A5568]">Time Synchronization:</span>
-              <span className="font-semibold text-[#2ECC71]">Synced</span>
-            </div>
+          <div className="text-xl font-bold text-[#0F172A] mt-1">
+            {isMetricsLoading ? "--" : metrics?.active_devices}
           </div>
+          <div className="text-[10px] text-[#2ECC71] font-semibold mt-1">Online Telemetry</div>
         </div>
 
-        {/* Column 3: Network Status */}
-        <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 shadow-sm space-y-4">
-          <h2 className="font-bold text-[#002855] text-sm uppercase tracking-wide">
-            Network Status
-          </h2>
-
-          <div className="text-xs space-y-3">
-            <div className="flex justify-between items-center bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0]">
-              <span className="flex items-center gap-1.5 text-[#4A5568] font-semibold">
-                <Wifi className="w-3.5 h-3.5 text-[#2ECC71]" /> MQTT Broker:
-              </span>
-              <span className="font-bold text-[#2ECC71]">Connected</span>
-            </div>
-            <div className="flex justify-between items-center bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0]">
-              <span className="text-[#4A5568] font-semibold">Connected Devices:</span>
-              <span className="font-bold text-[#002855]">
-                {metrics?.active_devices || 0} Nodes
-              </span>
-            </div>
-            <div className="flex justify-between items-center bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0]">
-              <span className="text-[#4A5568] font-semibold">Packet Rate:</span>
-              <span className="font-bold text-[#0F172A]">25 packets/sec</span>
-            </div>
-            <div className="flex justify-between items-center bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0]">
-              <span className="text-[#4A5568] font-semibold">Network Health:</span>
-              <span className="font-bold text-[#2ECC71]">
-                {metrics?.network_health || "Excellent"}
-              </span>
-            </div>
+        {/* Active Telemetry Sessions */}
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">
+            Active Sessions
           </div>
+          <div className="text-xl font-bold text-[#3498DB] mt-1">
+            {activeMonitoringCount} / {metrics?.patients_count || 0}
+          </div>
+          <div className="text-[10px] text-[#3498DB] font-semibold mt-1">WebSocket Feeds</div>
         </div>
+
+        {/* Critical Alerts */}
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">
+            Critical Vitals
+          </div>
+          <div className={`text-xl font-bold mt-1 ${criticalPatientsCount > 0 ? "text-[#E74C3C]" : "text-[#2ECC71]"}`}>
+            {criticalPatientsCount}
+          </div>
+          <div className="text-[10px] text-[#718096] mt-1">Vitals Out of Range</div>
+        </div>
+
+        {/* Network Alerts */}
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">
+            Device Alerts
+          </div>
+          <div className={`text-xl font-bold mt-1 ${ (metrics?.active_alerts_count || 0) > 0 ? "text-[#E74C3C]" : "text-[#2ECC71]"}`}>
+            {metrics?.active_alerts_count}
+          </div>
+          <div className="text-[10px] text-[#718096] mt-1">Sensor Warnings</div>
+        </div>
+
+        {/* Cybersecurity status */}
+        <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">
+            Cyber Threat Logs
+          </div>
+          <div className="text-xl font-bold text-[#0F172A] mt-1">
+            {isMetricsLoading ? "--" : metrics?.attacks_today}
+          </div>
+          <div className="text-[10px] text-[#2ECC71] font-semibold mt-1">IPS Isolated</div>
+        </div>
+      </div>
+
+      {/* ICU Central Telemetry Grid Display */}
+      <div className="bg-[#0A0F1D] rounded-lg p-5 border border-[#00FF66]/20 shadow-md">
+        <h2 className="text-[#00FF66] font-mono text-sm uppercase tracking-widest border-b border-[#00FF66]/20 pb-3 mb-4 flex items-center gap-2">
+          <HeartPulse className="w-5 h-5 animate-pulse" /> Live Telemetry Feed Matrix
+        </h2>
+
+        {patients.length === 0 ? (
+          <div className="text-xs font-mono text-gray-500 py-12 text-center">
+            No patients registered. Admitted ward subnet is empty.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {patients.map((p) => {
+              const live = liveVitals[p.id];
+              const isCritical = live && (live.heart_rate > 100 || live.heart_rate < 55 || live.spo2 < 93);
+
+              return (
+                <div
+                  key={p.id}
+                  className={`bg-[#111827] border rounded-lg p-4 font-mono text-xs flex flex-col justify-between h-[150px] transition-all ${
+                    isCritical
+                      ? "border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.2)] bg-red-950/10"
+                      : "border-[#00FF66]/20"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-white font-bold text-sm tracking-wide">
+                        {p.name}
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        ID: <code>{p.id}</code> | Ward: {p.ward_number}-{p.bed_number}
+                      </div>
+                    </div>
+                    {p.is_calibrated ? (
+                      <span className="text-[#00FF66] font-bold animate-pulse text-[10px]">
+                        ● STREAMING
+                      </span>
+                    ) : (
+                      <span className="text-gray-500 font-bold text-[10px]">
+                        UNCALIBRATED
+                      </span>
+                    )}
+                  </div>
+
+                  {p.is_calibrated ? (
+                    <div className="grid grid-cols-2 gap-4 py-2 border-t border-b border-[#00FF66]/10 my-2">
+                      <div className="flex items-center gap-2">
+                        <Heart className="w-4 h-4 text-red-500 fill-current animate-pulse" />
+                        <div>
+                          <div className="text-[10px] text-gray-400">HR</div>
+                          <div className={`font-bold text-sm ${isCritical ? "text-red-500" : "text-white"}`}>
+                            {live?.heart_rate || "--"} <span className="text-[9px]">bpm</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Droplet className="w-4 h-4 text-[#3498DB]" />
+                        <div>
+                          <div className="text-[10px] text-gray-400">SpO₂</div>
+                          <div className={`font-bold text-sm ${isCritical ? "text-red-500" : "text-white"}`}>
+                            {live?.spo2 || "--"} <span className="text-[9px]">%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex-grow flex items-center justify-center text-[10px] text-gray-500 uppercase tracking-wider py-4">
+                      Waiting for Device Connection
+                    </div>
+                  )}
+
+                  <div>
+                    <Link
+                      href={`/patients/${p.id}`}
+                      className="block text-center py-1 bg-[#1F2937] hover:bg-[#374151] border border-[#00FF66]/30 text-[#00FF66] text-[10px] font-bold rounded transition-colors uppercase tracking-wider"
+                    >
+                      Inspect Console
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

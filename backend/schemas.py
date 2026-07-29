@@ -37,11 +37,19 @@ class PatientBase(BaseModel):
     guardian_phone: Optional[str] = ""
     photo_path: Optional[str] = ""
     status: Optional[str] = "Normal"
+    gender: Optional[str] = "Male"
+    blood_group: Optional[str] = "O+"
+    ward_number: Optional[str] = "ICU-A"
+    bed_number: Optional[str] = "Bed-01"
+    doctor_assigned: Optional[str] = "Dr. Sarah Connor"
+    is_calibrated: Optional[bool] = False
+    calibration_progress: Optional[int] = 0
 
 class PatientCreate(PatientBase):
     connected_devices: Optional[List[str]] = []
 
 class PatientResponse(PatientBase):
+    admission_date: datetime.datetime
     created_at: datetime.datetime
 
     class Config:

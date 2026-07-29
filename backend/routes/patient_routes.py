@@ -1,15 +1,37 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session
-from backend.database import get_db
-from backend.models import Patient, Device
+from backend.database import get_db, SessionLocal
+from backend.models import Patient, Device, AuditLog
 from backend.schemas import PatientResponse, PatientCreate
 from backend.auth import get_current_user, require_role
 from backend.simulator_service import global_simulator_service
 import os
 import shutil
+import random
+import time
+import datetime
 
 router = APIRouter(prefix="/api/patients", tags=["Patients"])
+
+def run_calibration_task(patient_id: str, db_session_factory):
+    db = db_session_factory()
+    try:
+        patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        if not patient:
+            return
+        patient.is_calibrated = False
+        for progress in range(0, 101, 20):
+            patient.calibration_progress = progress
+            db.commit()
+            time.sleep(1.0)
+        patient.is_calibrated = True
+        patient.calibration_progress = 100
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        db.close()
 
 @router.get("", response_model=List[PatientResponse])
 def list_patients(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
@@ -17,21 +39,30 @@ def list_patients(db: Session = Depends(get_db), current_user = Depends(get_curr
 
 @router.post("", response_model=PatientResponse)
 def create_patient(
-    patient_id: str = Form(...),
     name: str = Form(...),
     age: int = Form(45),
+    gender: str = Form("Male"),
+    blood_group: str = Form("O+"),
     phone: str = Form(""),
     guardian_name: str = Form(""),
     guardian_phone: str = Form(""),
+    ward_number: str = Form("ICU-A"),
+    bed_number: str = Form("Bed-01"),
+    doctor_assigned: str = Form("Dr. Sarah Connor"),
     devices: str = Form(""), # comma separated
     photo: UploadFile = File(None),
     db: Session = Depends(get_db),
     current_user = Depends(require_role(["Admin", "Doctor", "Nurse"]))
 ):
-    existing = db.query(Patient).filter(Patient.id == patient_id).first()
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Patient ID '{patient_id}' already exists.")
-        
+    # Auto-generate Patient ID: PAT-XXXX
+    patient_id = ""
+    while True:
+        rand_num = random.randint(1000, 9999)
+        patient_id = f"PAT-{rand_num}"
+        existing = db.query(Patient).filter(Patient.id == patient_id).first()
+        if not existing:
+            break
+
     photo_path = ""
     if photo:
         os.makedirs("data/photos", exist_ok=True)
@@ -47,7 +78,14 @@ def create_patient(
         guardian_name=guardian_name,
         guardian_phone=guardian_phone,
         photo_path=photo_path,
-        status="Normal"
+        status="Normal",
+        gender=gender,
+        blood_group=blood_group,
+        ward_number=ward_number,
+        bed_number=bed_number,
+        doctor_assigned=doctor_assigned,
+        is_calibrated=False,
+        calibration_progress=0
     )
     db.add(new_patient)
     
@@ -64,6 +102,14 @@ def create_patient(
         )
         db.add(new_dev)
         
+    audit = AuditLog(
+        username=current_user.username,
+        action="PATIENT_REGISTER",
+        target=patient_id,
+        severity="Info",
+        result="Success"
+    )
+    db.add(audit)
     db.commit()
     db.refresh(new_patient)
     
@@ -79,18 +125,51 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db), current_user 
         raise HTTPException(status_code=404, detail="Patient not found")
         
     db.delete(patient)
+    
+    audit = AuditLog(
+        username=current_user.username,
+        action="PATIENT_DELETE",
+        target=patient_id,
+        severity="Warning",
+        result="Success"
+    )
+    db.add(audit)
     db.commit()
     global_simulator_service.simulator.reload_patients()
     return {"message": f"Patient {patient_id} deleted successfully"}
 
+@router.post("/{patient_id}/calibrate")
+def calibrate_patient(
+    patient_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+        
+    patient.is_calibrated = False
+    patient.calibration_progress = 0
+    db.commit()
+    
+    background_tasks.add_task(run_calibration_task, patient_id, SessionLocal)
+    return {"message": "Calibration started"}
+
 @router.get("/{patient_id}/vitals")
-def get_patient_vitals(patient_id: str):
+def get_patient_vitals(patient_id: str, db: Session = Depends(get_db)):
+    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+        
     if patient_id not in global_simulator_service.simulator.patients:
         raise HTTPException(status_code=404, detail="Patient simulator state not found")
         
     p_dev = global_simulator_service.simulator.patients[patient_id]
     return {
         "patient_id": patient_id,
+        "is_calibrated": patient.is_calibrated,
+        "calibration_progress": patient.calibration_progress,
         "heart_rate": p_dev.heart_rate,
         "spo2": p_dev.spo2,
         "lead_impedance": p_dev.lead_impedance,

@@ -22,6 +22,14 @@ class Patient(Base):
     guardian_phone = Column(String)
     photo_path = Column(String, default="")
     status = Column(String, default="Normal") # Normal, Critical, Quarantine
+    gender = Column(String, default="Male")
+    blood_group = Column(String, default="O+")
+    ward_number = Column(String, default="ICU-A")
+    bed_number = Column(String, default="Bed-01")
+    doctor_assigned = Column(String, default="Dr. Sarah Connor")
+    admission_date = Column(DateTime, default=datetime.datetime.utcnow)
+    is_calibrated = Column(Boolean, default=False)
+    calibration_progress = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     devices = relationship("Device", back_populates="patient", cascade="all, delete-orphan")
