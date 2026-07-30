@@ -4,7 +4,7 @@ echo Starting TRINETRA Enterprise Cybersecurity System...
 echo ========================================================
 
 :: Start FastAPI Backend API
-start cmd /k "echo Starting FastAPI Backend REST API... && python -m uvicorn backend.main:app --port 8000 --reload"
+start cmd /k "echo Starting FastAPI Backend REST API... && python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload"
 
 :: Start Next.js Frontend
 start cmd /k "echo Starting Next.js React Frontend Dashboard... && cd frontend && npm run dev -- -p 3000"
