@@ -18,11 +18,17 @@ interface NetworkStatus {
 
 export default function NetworkPage() {
   const queryClient = useQueryClient();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const { data: status, isLoading } = useQuery<NetworkStatus>({
     queryKey: ["network-status"],
     queryFn: () => fetchApi<NetworkStatus>("/network/status"),
     refetchInterval: 3000,
+    enabled: mounted,
   });
 
   const unblockMutation = useMutation({
@@ -35,6 +41,10 @@ export default function NetworkPage() {
       queryClient.invalidateQueries({ queryKey: ["network-status"] });
     },
   });
+
+  if (!mounted) {
+    return <div className="text-xs text-[#718096]">Loading network console...</div>;
+  }
 
   return (
     <div className="space-y-6">

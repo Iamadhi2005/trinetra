@@ -48,19 +48,30 @@ interface LiveVitalSummary {
 
 export default function DashboardPage() {
   const [liveVitals, setLiveVitals] = useState<Record<string, LiveVitalSummary>>({});
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Fetch Dashboard Metrics
   const { data: metrics, isLoading: isMetricsLoading } = useQuery<DashboardData>({
     queryKey: ["dashboard-metrics"],
     queryFn: () => fetchApi<DashboardData>("/dashboard"),
     refetchInterval: 3000,
+    enabled: mounted,
   });
 
   // Fetch Patients List
   const { data: patients = [] } = useQuery<Patient[]>({
     queryKey: ["patients"],
     queryFn: () => fetchApi<Patient[]>("/patients"),
+    enabled: mounted,
   });
+
+  if (!mounted) {
+    return <div className="text-xs text-[#718096]">Loading central telemetry station...</div>;
+  }
 
   // Maintain list of active WebSockets for all calibrated patients to render the central ICU telemetry panel!
   useEffect(() => {

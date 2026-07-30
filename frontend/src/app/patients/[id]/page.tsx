@@ -73,6 +73,11 @@ export default function PatientConsolePage() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef(0);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Load Patient profile
   const loadPatientProfile = async () => {
     try {

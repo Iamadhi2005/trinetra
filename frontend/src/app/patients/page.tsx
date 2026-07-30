@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api";
 import { UserPlus, Trash2, Phone, Shield, User as UserIcon, Link2, AlertCircle } from "lucide-react";
@@ -42,10 +42,16 @@ export default function PatientsPage() {
   const [devices, setDevices] = useState("ECG Monitor, Pulse Oximeter");
   const [photo, setPhoto] = useState<File | null>(null);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Fetch Patients
   const { data: patients = [], isLoading } = useQuery<Patient[]>({
     queryKey: ["patients"],
     queryFn: () => fetchApi<Patient[]>("/patients"),
+    enabled: mounted,
   });
 
   // Delete Mutation
@@ -57,6 +63,10 @@ export default function PatientsPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
     },
   });
+
+  if (!mounted) {
+    return <div className="text-xs text-[#718096]">Loading patient directory...</div>;
+  }
 
   // Add Patient Form Submit
   const handleAddPatient = async (e: React.FormEvent) => {
