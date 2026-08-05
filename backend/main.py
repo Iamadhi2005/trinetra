@@ -194,27 +194,21 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
         while True:
             p_dev = global_simulator_service.simulator.patients.get(patient_id)
             if not p_dev:
-                hr = 75.0
-                spo2 = 98.2
-                infusion = 5.0
-                battery = 100.0
-                status = "Online"
-            else:
-                hr = p_dev.heart_rate
-                spo2 = p_dev.spo2
-                infusion = p_dev.infusion_rate
-                battery = p_dev.battery
-                status = p_dev.status
+                from patient_simulator import DeviceSimulator
+                p_dev = DeviceSimulator(patient_id)
+                global_simulator_service.simulator.patients[patient_id] = p_dev
+                
+            hr = p_dev.heart_rate
+            spo2 = p_dev.spo2
+            infusion = p_dev.infusion_rate
+            battery = p_dev.battery
+            status = p_dev.status
+            bp = f"{int(p_dev.systolic_bp)}/{int(p_dev.diastolic_bp)}"
+            temp = round(p_dev.temperature, 1)
+            resp = int(p_dev.respiration_rate)
                 
             ecg_val = generate_pqrst_ecg_point(t_ms, int(hr))
             pleth_val = generate_spo2_pleth_point(t_ms, int(hr))
-            
-            systolic = int(115 + (hr - 70) * 0.5 + random.uniform(-2, 2))
-            diastolic = int(75 + (hr - 70) * 0.3 + random.uniform(-1, 1))
-            bp = f"{systolic}/{diastolic}"
-            
-            temp = round(36.5 + (hr - 70) * 0.02 + random.uniform(-0.1, 0.1), 1)
-            resp = int(12 + (hr - 70) * 0.1 + random.randint(-1, 1))
             
             payload = {
                 "ecg_voltage": round(ecg_val, 3),

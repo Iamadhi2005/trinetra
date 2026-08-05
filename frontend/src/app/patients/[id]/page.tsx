@@ -5,12 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { fetchApi } from "@/lib/api";
 import {
   Play,
+  RotateCcw,
   Maximize2,
   Minimize2,
   ZoomIn,
   ZoomOut,
   Move,
   ArrowLeft,
+  CheckCircle2,
 } from "lucide-react";
 
 interface PatientDetails {
@@ -51,7 +53,7 @@ export default function PatientConsolePage() {
   const [calibrating, setCalibrating] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  // Vitals State
+  // Vitals State - Received 100% directly from backend WebSocket
   const [vitals, setVitals] = useState<TelemetryPoint | null>(null);
   const [waveHistory, setWaveHistory] = useState<
     { ecg: number; pleth: number; time: string }[]
@@ -95,7 +97,7 @@ export default function PatientConsolePage() {
     loadPatientProfile();
   }, [patientId]);
 
-  // Trigger Device Calibration
+  // Trigger Device Calibration / Recalibration
   const handleCalibrate = async () => {
     setCalibrating(true);
     setProgress(0);
@@ -107,6 +109,7 @@ export default function PatientConsolePage() {
         if (stats.is_calibrated || stats.calibration_progress >= 100) {
           clearInterval(interval);
           setCalibrating(false);
+          setPatient((prev) => (prev ? { ...prev, is_calibrated: true, calibration_progress: 100 } : null));
           loadPatientProfile();
         }
       }, 1000);
@@ -115,33 +118,36 @@ export default function PatientConsolePage() {
     }
   };
 
-  // WebSocket Live Telemetry Connection
+  // Backend Real-Time WebSocket Telemetry Receiver (Zero Client-Side Math)
   useEffect(() => {
     if (!patient?.is_calibrated) return;
 
     const ws = new WebSocket(`ws://localhost:8000/ws/telemetry/${patientId}`);
 
     ws.onmessage = (event) => {
-      const data: TelemetryPoint = JSON.parse(event.data);
-      setVitals(data);
+      try {
+        const data: TelemetryPoint = JSON.parse(event.data);
+        setVitals(data);
 
-      const timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString("en-US", {
-        hour12: false,
-        minute: "2-digit",
-        second: "2-digit",
-      });
+        const timeLabel = new Date(data.timestamp * 1000).toLocaleTimeString("en-US", {
+          hour12: false,
+          minute: "2-digit",
+          second: "2-digit",
+        });
 
-      setWaveHistory((prev) => {
-        const next = [
-          ...prev,
-          {
-            ecg: data.ecg_voltage,
-            pleth: data.spo2_pleth !== undefined ? data.spo2_pleth : 0.5,
-            time: timeLabel,
-          },
-        ];
-        return next.slice(-600); // 12 seconds buffer
-      });
+        // Store raw backend voltage points directly
+        setWaveHistory((prev) => {
+          const next = [
+            ...prev,
+            {
+              ecg: data.ecg_voltage !== undefined ? data.ecg_voltage : 0,
+              pleth: data.spo2_pleth !== undefined ? data.spo2_pleth : 0.5,
+              time: timeLabel,
+            },
+          ];
+          return next.slice(-400); // 400 raw backend sample points buffer
+        });
+      } catch (e) {}
     };
 
     return () => {
@@ -149,7 +155,7 @@ export default function PatientConsolePage() {
     };
   }, [patient?.is_calibrated, patientId]);
 
-  // Render Top ECG Canvas (Lime Green - Exact Match)
+  // Plot Raw Backend ECG Wave Points onto Top Canvas (Lime Green)
   useEffect(() => {
     if (!ecgCanvasRef.current || waveHistory.length === 0 || isFullscreen) return;
     const canvas = ecgCanvasRef.current;
@@ -159,11 +165,11 @@ export default function PatientConsolePage() {
     const width = canvas.width;
     const height = canvas.height;
 
-    // Pitch Black Background
+    // Pitch Black Screen Background
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, width, height);
 
-    // Subtle Medical Grid Dots
+    // Subtle Grid Dots
     ctx.fillStyle = "#222222";
     for (let x = 0; x < width; x += 12) {
       for (let y = 0; y < height; y += 12) {
@@ -171,7 +177,7 @@ export default function PatientConsolePage() {
       }
     }
 
-    // Draw Bright Lime Green ECG Line with realistic myographic jitter
+    // Draw Bright Lime Green ECG Line from Raw Backend Points
     ctx.strokeStyle = "#39FF14";
     ctx.lineWidth = 2.0;
     ctx.lineJoin = "round";
@@ -179,10 +185,9 @@ export default function PatientConsolePage() {
     ctx.shadowBlur = 4;
     ctx.beginPath();
 
-    const pts = waveHistory.slice(-300);
-    pts.forEach((pt, idx) => {
-      const x = (idx / (pts.length - 1)) * width;
-      // Map ECG voltage (-0.6mV to +2.4mV) to canvas height for sharp R-needle peaks
+    waveHistory.forEach((pt, idx) => {
+      const x = (idx / (waveHistory.length - 1)) * width;
+      // Map raw backend ECG voltage (-0.6mV to +2.4mV) to canvas height
       const y = height - ((pt.ecg + 0.6) / 3.0) * height;
 
       if (idx === 0) {
@@ -194,7 +199,7 @@ export default function PatientConsolePage() {
     ctx.stroke();
   }, [waveHistory, isFullscreen]);
 
-  // Render Bottom SpO2 Pleth Canvas (Warm Golden Yellow - Exact Match)
+  // Plot Raw Backend SpO2 Pleth Wave Points onto Bottom Canvas (Warm Yellow)
   useEffect(() => {
     if (!plethCanvasRef.current || waveHistory.length === 0 || isFullscreen) return;
     const canvas = plethCanvasRef.current;
@@ -204,11 +209,11 @@ export default function PatientConsolePage() {
     const width = canvas.width;
     const height = canvas.height;
 
-    // Pitch Black Background
+    // Pitch Black Screen Background
     ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, width, height);
 
-    // Subtle Medical Grid Dots
+    // Subtle Grid Dots
     ctx.fillStyle = "#222222";
     for (let x = 0; x < width; x += 12) {
       for (let y = 0; y < height; y += 12) {
@@ -216,7 +221,7 @@ export default function PatientConsolePage() {
       }
     }
 
-    // Draw Bright Warm Yellow Pleth Wave Line
+    // Draw Bright Warm Yellow Pleth Line from Raw Backend Points
     ctx.strokeStyle = "#FFFF33";
     ctx.lineWidth = 2.5;
     ctx.lineJoin = "round";
@@ -224,9 +229,9 @@ export default function PatientConsolePage() {
     ctx.shadowBlur = 4;
     ctx.beginPath();
 
-    const pts = waveHistory.slice(-300);
-    pts.forEach((pt, idx) => {
-      const x = (idx / (pts.length - 1)) * width;
+    waveHistory.forEach((pt, idx) => {
+      const x = (idx / (waveHistory.length - 1)) * width;
+      // Map raw backend Pleth voltage (0.0 to 1.0) to canvas height
       const y = height - (0.1 + pt.pleth * 0.8) * height;
 
       if (idx === 0) {
@@ -238,7 +243,7 @@ export default function PatientConsolePage() {
     ctx.stroke();
   }, [waveHistory, isFullscreen]);
 
-  // Fullscreen Canvas Engine
+  // Fullscreen Rendering Engine from Raw Backend Points
   useEffect(() => {
     if (!isFullscreen || !fullscreenCanvasRef.current || waveHistory.length === 0) return;
     const canvas = fullscreenCanvasRef.current;
@@ -271,11 +276,8 @@ export default function PatientConsolePage() {
       const y = (height / 2) - ((pt.ecg + 0.6) / 3.0) * (height / 2 - 20);
 
       if (x >= -10 && x <= width + 10) {
-        if (idx === 0 || x <= 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+        if (idx === 0 || x <= 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
     });
     ctx.stroke();
@@ -292,14 +294,11 @@ export default function PatientConsolePage() {
       const y = height - (0.1 + pt.pleth * 0.8) * (height / 2 - 20);
 
       if (x >= -10 && x <= width + 10) {
-        if (idx === 0 || x <= 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+        if (idx === 0 || x <= 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
 
-      if (idx % 60 === 0 && x >= 0 && x <= width) {
+      if (idx % 40 === 0 && x >= 0 && x <= width) {
         ctx.fillStyle = "#888888";
         ctx.font = "11px monospace";
         ctx.fillText(pt.time, x, height - 10);
@@ -338,7 +337,7 @@ export default function PatientConsolePage() {
         </div>
       </div>
 
-      {/* Patient Profile Card */}
+      {/* Patient Profile Banner */}
       <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-[#EBF3FA] border border-[#BEE3F8] overflow-hidden flex items-center justify-center font-bold text-[#002855] text-xl flex-shrink-0">
@@ -366,45 +365,57 @@ export default function PatientConsolePage() {
           </div>
         </div>
 
-        {!patient?.is_calibrated && (
-          <div className="w-full md:w-auto flex flex-col items-end gap-2">
-            {calibrating ? (
-              <div className="w-full md:w-56 space-y-1.5">
-                <div className="flex justify-between text-xs text-[#E67E22] font-semibold">
-                  <span>Linking Telemetry Node...</span>
-                  <span>{progress}%</span>
-                </div>
-                <div className="w-full bg-[#EDF2F7] rounded-full h-2">
-                  <div
-                    className="bg-[#E67E22] h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${progress}%` }}
-                  ></div>
-                </div>
+        {/* Calibration & Recalibration Controls */}
+        <div className="w-full md:w-auto flex flex-col items-end gap-2">
+          {calibrating ? (
+            <div className="w-full md:w-56 space-y-1.5">
+              <div className="flex justify-between text-xs text-[#E67E22] font-semibold">
+                <span>Linking Telemetry Node...</span>
+                <span>{progress}%</span>
               </div>
-            ) : (
+              <div className="w-full bg-[#EDF2F7] rounded-full h-2">
+                <div
+                  className="bg-[#E67E22] h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+            </div>
+          ) : patient?.is_calibrated ? (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[#2ECC71] font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-4 h-4" /> Calibrated & Streaming
+              </span>
               <button
                 onClick={handleCalibrate}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#E67E22] hover:bg-[#D35400] text-white text-xs font-semibold rounded shadow-sm transition-colors uppercase tracking-wide"
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#F8FAFC] hover:bg-[#EDF2F7] border border-[#CBD5E0] text-[#002855] text-xs font-semibold rounded shadow-sm transition-colors"
+                title="Re-run 5-second sensor calibration and re-generate telemetry configuration"
               >
-                <Play className="w-4 h-4 fill-current" /> Calibrate Medical Device
+                <RotateCcw className="w-3.5 h-3.5 text-[#3498DB]" /> Recalibrate Patient
               </button>
-            )}
-          </div>
-        )}
+            </div>
+          ) : (
+            <button
+              onClick={handleCalibrate}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#E67E22] hover:bg-[#D35400] text-white text-xs font-semibold rounded shadow-sm transition-colors uppercase tracking-wide"
+            >
+              <Play className="w-4 h-4 fill-current" /> Calibrate Medical Device
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Main Screen: 1:1 Replica of Bedside ICU Patient Monitor */}
+      {/* Main Screen: 1:1 Visual Replica of Bedside ICU Patient Monitor */}
       {!patient?.is_calibrated ? (
         <div className="bg-white border border-dashed border-[#CBD5E0] rounded-lg p-16 text-center shadow-sm space-y-4">
           <div className="text-5xl animate-pulse">🔌</div>
           <h2 className="text-lg font-bold text-[#4A5568]">Waiting for Device Connection</h2>
           <p className="text-xs text-[#718096] max-w-md mx-auto">
-            This patient's physiological telemetry has not been calibrated yet. Please click the "Calibrate Medical Device" button above to establish WebSocket data streaming link.
+            This patient's physiological telemetry has not been calibrated yet. Please click the "Calibrate Medical Device" button above to generate personal telemetry configuration file and establish live streaming link.
           </p>
         </div>
       ) : (
         <div className="bg-[#000000] p-6 rounded-lg font-mono border border-gray-800 text-white min-h-[500px] flex flex-col justify-between shadow-2xl select-none">
-          {/* Top Section: ECG Lead II (Green) */}
+          {/* Top Section: ECG Lead II (Lime Green - Exact Match) */}
           <div className="flex items-center justify-between relative h-[180px] border-b border-gray-900 pb-2">
             <div className="absolute top-1 left-1 text-xs text-gray-400 font-bold z-10">
               1 mV
@@ -422,12 +433,12 @@ export default function PatientConsolePage() {
             <div className="w-[140px] text-right flex-shrink-0 flex flex-col justify-between h-full pl-4">
               <div className="text-xs text-[#39FF14] font-bold">1/min</div>
               <div className="text-7xl font-extrabold text-[#39FF14] tracking-tighter leading-none my-auto font-sans">
-                {vitals?.heart_rate || "72"}
+                {vitals?.heart_rate || "--"}
               </div>
             </div>
           </div>
 
-          {/* Bottom Section: SpO2 Pleth Wave (Yellow) */}
+          {/* Bottom Section: SpO2 Pleth Wave (Warm Yellow - Exact Match) */}
           <div className="flex items-center justify-between relative h-[180px] pt-2">
             <canvas
               ref={plethCanvasRef}
@@ -444,7 +455,7 @@ export default function PatientConsolePage() {
                 <div>%</div>
               </div>
               <div className="text-7xl font-extrabold text-[#FFFF33] tracking-tighter leading-none my-auto font-sans">
-                {vitals?.spo2 || "94"}
+                {vitals?.spo2 || "--"}
               </div>
             </div>
           </div>
@@ -453,19 +464,19 @@ export default function PatientConsolePage() {
           <div className="grid grid-cols-4 gap-4 border-t border-gray-900 pt-4 text-xs">
             <div>
               <span className="text-red-500 font-bold block text-[11px]">NIBP (mmHg)</span>
-              <span className="text-2xl font-bold text-red-500">{vitals?.blood_pressure || "120/80"}</span>
+              <span className="text-2xl font-bold text-red-500">{vitals?.blood_pressure || "--"}</span>
             </div>
             <div>
               <span className="text-orange-400 font-bold block text-[11px]">TEMP (°C)</span>
-              <span className="text-2xl font-bold text-orange-400">{vitals?.temperature || "37.1"}</span>
+              <span className="text-2xl font-bold text-orange-400">{vitals?.temperature || "--"}</span>
             </div>
             <div>
               <span className="text-purple-400 font-bold block text-[11px]">RESP (/min)</span>
-              <span className="text-2xl font-bold text-purple-400">{vitals?.respiration_rate || "16"}</span>
+              <span className="text-2xl font-bold text-purple-400">{vitals?.respiration_rate || "--"}</span>
             </div>
             <div>
               <span className="text-blue-400 font-bold block text-[11px]">INFUSION (mL)</span>
-              <span className="text-2xl font-bold text-blue-400">{vitals?.infusion_level || "820.0"}</span>
+              <span className="text-2xl font-bold text-blue-400">{vitals?.infusion_level || "--"}</span>
             </div>
           </div>
         </div>

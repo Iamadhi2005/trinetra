@@ -13,23 +13,24 @@ class DeviceSimulator:
     def __init__(self, patient_id):
         self.patient_id = patient_id
         
-        # Base physiological variables
-        self.heart_rate = 75.0
-        self.spo2 = 98.0
-        self.lead_impedance = 500.0
-        self.pacing_rate = 70.0
-        self.battery = 100.0
+        # Unique deterministic physiological baseline per patient_id
+        seed_val = sum(ord(c) for c in str(patient_id))
+        r = random.Random(seed_val)
         
-        # Infusion Pump parameters
+        self.heart_rate = float(r.randint(68, 86))
+        self.spo2 = round(r.uniform(96.5, 99.2), 1)
+        self.lead_impedance = float(r.randint(480, 520))
+        self.pacing_rate = float(r.randint(65, 75))
+        self.battery = float(r.randint(92, 100))
+        
         self.infusion_rate = 5.0
-        self.infused_volume = 120.0  # mL
+        self.infused_volume = float(r.randint(80, 250))
         self.pump_status = "Pumping Normal"
         
-        # Additional vitals
-        self.systolic_bp = 115.0
-        self.diastolic_bp = 75.0
-        self.temperature = 37.0       # °C
-        self.respiration_rate = 16.0  # rpm
+        self.systolic_bp = float(r.randint(110, 126))
+        self.diastolic_bp = float(r.randint(70, 82))
+        self.temperature = round(r.uniform(36.6, 37.3), 1)
+        self.respiration_rate = float(r.randint(13, 18))
         
         self.attack_mode = "Normal"
         self.ips_disabled = True

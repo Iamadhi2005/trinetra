@@ -28,6 +28,26 @@ def run_calibration_task(patient_id: str, db_session_factory):
         patient.is_calibrated = True
         patient.calibration_progress = 100
         db.commit()
+
+        # Write dedicated personal telemetry configuration file
+        os.makedirs("data", exist_ok=True)
+        telemetry_file = f"data/telemetry_{patient_id}.json"
+        telemetry_data = {
+            "patient_id": patient_id,
+            "patient_name": patient.name,
+            "calibrated_at": time.time(),
+            "status": "Calibrated & Live",
+            "ward_number": patient.ward_number,
+            "bed_number": patient.bed_number,
+            "doctor": patient.doctor_assigned,
+            "base_heart_rate": 72.0 if "102" in patient_id else 76.0,
+            "base_spo2": 94.0 if "102" in patient_id else 98.0
+        }
+        with open(telemetry_file, "w") as f:
+            import json
+            json.dump(telemetry_data, f, indent=2)
+
+        global_simulator_service.simulator.reload_patients()
     except Exception:
         pass
     finally:
