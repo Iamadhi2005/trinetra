@@ -111,37 +111,71 @@ async def simulator_background_loop():
         await asyncio.sleep(1.0)
 
 def generate_pqrst_ecg_point(t_ms: int, bpm: int = 75) -> float:
-    """Generates a clinically realistic ECG signal voltage (in mV) at time t_ms.
-    bpm: Beats Per Minute, determines the cardiac cycle period.
-    """
-    period = 60000 / bpm
+    """Generates an authentic high-resolution clinical ECG PQRST complex voltage (mV) with razor-sharp QRS needle spikes."""
+    period = 60000.0 / bpm
     phase = (t_ms % period) / period
     
     val = 0.0
     
-    # Atrial depolarization
-    if 0.1 <= phase <= 0.2:
-        p_phase = (phase - 0.1) / 0.1
-        val += 0.15 * math.sin(p_phase * math.pi)
-    # Q-wave
-    elif 0.22 <= phase <= 0.24:
-        q_phase = (phase - 0.22) / 0.02
-        val -= 0.2 * math.sin(q_phase * math.pi)
-    # R-wave spike
-    elif 0.24 < phase <= 0.28:
-        r_phase = (phase - 0.24) / 0.04
-        val += 1.6 * math.sin(r_phase * math.pi)
-    # S-wave
-    elif 0.28 < phase <= 0.32:
-        s_phase = (phase - 0.28) / 0.04
-        val -= 0.45 * math.sin(s_phase * math.pi)
-    # T-wave
-    elif 0.45 <= phase <= 0.65:
-        t_phase = (phase - 0.45) / 0.20
-        val += 0.35 * math.sin(t_phase * math.pi)
+    # 1. P-Wave (Atrial Depolarization)
+    if 0.10 <= phase <= 0.18:
+        p_p = (phase - 0.10) / 0.08
+        val += 0.15 * math.sin(p_p * math.pi)
         
-    val += random.uniform(-0.02, 0.02)
+    # 2. Q-Wave (Initial Sharp Downward Dip)
+    elif 0.22 <= phase <= 0.235:
+        q_p = (phase - 0.22) / 0.015
+        val -= 0.25 * math.sin(q_p * math.pi)
+        
+    # 3. R-Wave (Razor-Sharp Ventricular Needle Spike: +2.2mV)
+    elif 0.235 < phase <= 0.265:
+        r_p = (phase - 0.235) / 0.03
+        val += 2.2 * math.sin(r_p * math.pi)
+        
+    # 4. S-Wave (Deep Terminal Downward Dip)
+    elif 0.265 < phase <= 0.29:
+        s_p = (phase - 0.265) / 0.025
+        val -= 0.45 * math.sin(s_p * math.pi)
+        
+    # 5. T-Wave (Ventricular Repolarization)
+    elif 0.42 <= phase <= 0.62:
+        t_p = (phase - 0.42) / 0.20
+        val += 0.32 * math.sin(t_p * math.pi)
+        
+    # 6. U-Wave (Post-T Wave)
+    elif 0.65 <= phase <= 0.72:
+        u_p = (phase - 0.65) / 0.07
+        val += 0.04 * math.sin(u_p * math.pi)
+        
+    # Baseline physiological myographic micro-jitter
+    val += random.uniform(-0.025, 0.025)
     return val
+
+def generate_spo2_pleth_point(t_ms: int, bpm: int = 75) -> float:
+    """Generates an authentic arterial SpO2 Plethysmograph pulse waveform (0.0 to 1.0) with a dicrotic notch bump."""
+    period = 60000 / bpm
+    phase = (t_ms % period) / period
+    
+    val = 0.0
+    # Rapid Systolic Upstroke (0.0 to 0.22)
+    if phase <= 0.22:
+        u_phase = phase / 0.22
+        val = math.sin(u_phase * (math.pi / 2.0))
+    # Diastolic Decay (0.22 to 0.40)
+    elif 0.22 < phase <= 0.40:
+        d_phase = (phase - 0.22) / 0.18
+        val = 1.0 - 0.55 * math.sin(d_phase * (math.pi / 2.0))
+    # Dicrotic Notch secondary aortic closure bump (0.40 to 0.52)
+    elif 0.40 < phase <= 0.52:
+        n_phase = (phase - 0.40) / 0.12
+        val = 0.45 + 0.15 * math.sin(n_phase * math.pi)
+    # Diastolic Tail Decay (0.52 to 1.0)
+    else:
+        t_phase = (phase - 0.52) / 0.48
+        val = 0.45 * math.cos(t_phase * (math.pi / 2.0))
+        
+    val += random.uniform(-0.01, 0.01)
+    return max(0.0, min(1.0, val))
 
 @app.websocket("/ws/telemetry/{patient_id}")
 async def websocket_telemetry(websocket: WebSocket, patient_id: str):
@@ -173,6 +207,7 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
                 status = p_dev.status
                 
             ecg_val = generate_pqrst_ecg_point(t_ms, int(hr))
+            pleth_val = generate_spo2_pleth_point(t_ms, int(hr))
             
             systolic = int(115 + (hr - 70) * 0.5 + random.uniform(-2, 2))
             diastolic = int(75 + (hr - 70) * 0.3 + random.uniform(-1, 1))
@@ -183,6 +218,7 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
             
             payload = {
                 "ecg_voltage": round(ecg_val, 3),
+                "spo2_pleth": round(pleth_val, 3),
                 "heart_rate": int(hr),
                 "spo2": round(spo2, 1),
                 "blood_pressure": bp,

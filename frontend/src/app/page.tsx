@@ -69,13 +69,9 @@ export default function DashboardPage() {
     enabled: mounted,
   });
 
-  if (!mounted) {
-    return <div className="text-xs text-[#718096]">Loading central telemetry station...</div>;
-  }
-
   // Maintain list of active WebSockets for all calibrated patients to render the central ICU telemetry panel!
   useEffect(() => {
-    if (patients.length === 0) return;
+    if (!mounted || patients.length === 0) return;
 
     const sockets: Record<string, WebSocket> = {};
 
@@ -103,7 +99,11 @@ export default function DashboardPage() {
     return () => {
       Object.values(sockets).forEach((ws) => ws.close());
     };
-  }, [patients]);
+  }, [patients, mounted]);
+
+  if (!mounted) {
+    return <div className="text-xs text-[#718096]">Loading central telemetry station...</div>;
+  }
 
   const activeMonitoringCount = Object.values(liveVitals).filter(v => v.is_calibrated).length;
   const criticalPatientsCount = Object.values(liveVitals).filter(v => v.heart_rate > 100 || v.heart_rate < 55 || v.spo2 < 93).length;
