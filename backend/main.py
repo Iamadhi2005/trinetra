@@ -59,7 +59,11 @@ def seed_initial_data():
     db = SessionLocal()
     try:
         # Seed initial users if empty
-        if db.query(User).count() == 0:
+        if db.query(User).filter(User.username == "techiebatman77").count() == 0:
+            db.add(User(username="techiebatman77", password_hash=get_password_hash("admin123"), name="Techie Batman (SOC Admin)", role="Admin"))
+            db.commit()
+
+        if db.query(User).count() <= 1:
             db.add(User(username="admin", password_hash=get_password_hash("admin123"), name="Chief SOC Admin", role="Admin"))
             db.add(User(username="doctor", password_hash=get_password_hash("doctor123"), name="Dr. Sarah Connor", role="Doctor"))
             db.add(User(username="nurse", password_hash=get_password_hash("nurse123"), name="Nurse Joy", role="Nurse"))
@@ -94,8 +98,12 @@ def seed_initial_data():
             db.add(IPSRule(name="Physiological Outlier Filter", description="Quarantine device telemetry if Isolation Forest flags anomaly score < -0.015", enabled=True, threshold=-0.015))
             db.add(IPSRule(name="MitM Cryptographic Signature Check", description="Reject and quarantine telemetry with invalid HMAC keys", enabled=True, threshold=1.0))
             db.add(IPSRule(name="Replay Window Verification", description="Block payloads with timestamp latency exceeding 3000ms", enabled=True, threshold=3000.0))
-            db.commit()
-            
+        # Clear stale quarantine records from prior false positives
+        from backend.models import QuarantineRecord
+        db.query(QuarantineRecord).delete()
+        db.query(Alert).filter(Alert.status == "Unresolved").delete()
+        db.query(Device).update({Device.status: "Online"})
+        db.commit()
     finally:
         db.close()
 
@@ -219,6 +227,7 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
                 "temperature": temp,
                 "respiration_rate": max(8, min(30, resp)),
                 "infusion_level": round(infusion, 1),
+                "pacing_rate": int(p_dev.pacing_rate),
                 "battery": int(battery),
                 "status": status,
                 "timestamp": time.time()

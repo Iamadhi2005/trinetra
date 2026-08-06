@@ -38,6 +38,7 @@ interface TelemetryPoint {
   temperature: number;
   respiration_rate: number;
   infusion_level: number;
+  pacing_rate?: number;
   battery: number;
   status: string;
   timestamp: number;
@@ -461,7 +462,7 @@ export default function PatientConsolePage() {
           </div>
 
           {/* Lower Parameter Row */}
-          <div className="grid grid-cols-4 gap-4 border-t border-gray-900 pt-4 text-xs">
+          <div className="grid grid-cols-5 gap-3 border-t border-gray-900 pt-4 text-xs">
             <div>
               <span className="text-red-500 font-bold block text-[11px]">NIBP (mmHg)</span>
               <span className="text-2xl font-bold text-red-500">{vitals?.blood_pressure || "--"}</span>
@@ -477,6 +478,10 @@ export default function PatientConsolePage() {
             <div>
               <span className="text-blue-400 font-bold block text-[11px]">INFUSION (mL)</span>
               <span className="text-2xl font-bold text-blue-400">{vitals?.infusion_level || "--"}</span>
+            </div>
+            <div>
+              <span className="text-emerald-400 font-bold block text-[11px]">PACEMAKER (bpm)</span>
+              <span className="text-2xl font-bold text-emerald-400">{vitals?.pacing_rate || "70"}</span>
             </div>
           </div>
         </div>

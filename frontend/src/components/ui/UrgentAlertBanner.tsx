@@ -7,12 +7,16 @@ import { AlertTriangle, Volume2, VolumeX } from "lucide-react";
 export default function UrgentAlertBanner() {
   const [alertCount, setAlertCount] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [dismissed, setDismissed] = useState<boolean>(false);
 
   useEffect(() => {
     const checkQuarantine = async () => {
       try {
         const items = await fetchApi<any[]>("/security/quarantine");
         setAlertCount(items.length);
+        if (items.length === 0) {
+          setDismissed(false);
+        }
       } catch (err) {
         setAlertCount(0);
       }
@@ -25,7 +29,7 @@ export default function UrgentAlertBanner() {
 
   // Web Audio API Alarm Synthesizer
   useEffect(() => {
-    if (alertCount > 0 && !isMuted) {
+    if (alertCount > 0 && !isMuted && !dismissed) {
       let audioCtx: AudioContext | null = null;
       let intervalId: any = null;
 
@@ -55,9 +59,9 @@ export default function UrgentAlertBanner() {
         if (audioCtx) audioCtx.close();
       };
     }
-  }, [alertCount, isMuted]);
+  }, [alertCount, isMuted, dismissed]);
 
-  if (alertCount === 0) return null;
+  if (alertCount === 0 || dismissed) return null;
 
   return (
     <div className="bg-[#78281F] text-[#F1948A] border-b-2 border-[#EC7063] px-6 py-3 flex items-center justify-between shadow-lg animate-pulse">
@@ -67,22 +71,31 @@ export default function UrgentAlertBanner() {
           🚨 URGENT: {alertCount} CLINICAL THREATS DETECTED & ISOLATED IN SOFT QUARANTINE!
         </span>
       </div>
-      <button
-        onClick={() => setIsMuted(!isMuted)}
-        className="flex items-center gap-1.5 px-3 py-1 bg-[#922B21] hover:bg-[#A93226] text-white rounded text-xs font-semibold transition-colors"
-      >
-        {isMuted ? (
-          <>
-            <VolumeX className="w-3.5 h-3.5" />
-            <span>Unmute Alarm</span>
-          </>
-        ) : (
-          <>
-            <Volume2 className="w-3.5 h-3.5" />
-            <span>Mute Sound</span>
-          </>
-        )}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setIsMuted(!isMuted)}
+          className="flex items-center gap-1.5 px-3 py-1 bg-[#922B21] hover:bg-[#A93226] text-white rounded text-xs font-semibold transition-colors"
+        >
+          {isMuted ? (
+            <>
+              <VolumeX className="w-3.5 h-3.5" />
+              <span>Unmute Alarm</span>
+            </>
+          ) : (
+            <>
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Mute Sound</span>
+            </>
+          )}
+        </button>
+        <button
+          onClick={() => setDismissed(true)}
+          className="px-2.5 py-1 bg-black/30 hover:bg-black/50 text-white rounded text-xs font-semibold transition-colors"
+          title="Dismiss Banner"
+        >
+          ✕ Dismiss
+        </button>
+      </div>
     </div>
   );
 }

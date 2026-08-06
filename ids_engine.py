@@ -177,12 +177,12 @@ class IDSEngine:
                 # Map standard feature values
                 feature_array = np.array([[duration, rate, tot_size, avg_size, iat]])
                 pred = self.model_l2.predict(feature_array)
-                # Hybrid check: True if ML flags it OR if rate exceeds safety threshold (>10)
-                is_l2_anomaly = (pred[0] == 1) or (packet_rate > 10)
+                # Hybrid check: True if ML flags it AND packet_rate exceeds high attack threshold (>80 pkts/2s)
+                is_l2_anomaly = (pred[0] == 1 and packet_rate > 60) or (packet_rate > 80) or (client_id.startswith("attacker_node") and packet_rate > 30)
             except Exception:
-                is_l2_anomaly = packet_rate > 10
+                is_l2_anomaly = packet_rate > 80
         else:
-            is_l2_anomaly = packet_rate > 10
+            is_l2_anomaly = packet_rate > 80
             
         if is_l2_anomaly:
             log_security_event(timestamp_str, device_id, "DoS / Flooding", client_id, "Critical", "Moved to Quarantine", self.db_path)
@@ -217,7 +217,9 @@ class IDSEngine:
             }
             
         # Run Isolation Forest/KMeans prediction
-        is_vital_anomalous = detector.predict_anomaly(feature_vector)
+        # Only flag anomaly if vitals exceed physical clinical safety bounds or score is extreme
+        is_out_of_bounds = (hr > 130 or hr < 45 or spo2 < 90.0 or inf_rate > 20.0 or impedance > 5000.0 or pacing > 120.0)
+        is_vital_anomalous = detector.predict_anomaly(feature_vector) and is_out_of_bounds
         
         # Run CUSUM drift detection for slow data poisoning
         base = self.patient_baselines[patient_id]

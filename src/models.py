@@ -38,8 +38,8 @@ class VitalAnomalyDetector:
         self.features_std = None
         
         if model_type == "IsolationForest":
-            # contamination parameter sets the expected anomaly fraction
-            self.model = IsolationForest(contamination=0.03, random_state=42)
+            # contamination='auto' prevents forcing normal baseline data into fake anomalies
+            self.model = IsolationForest(contamination='auto', random_state=42)
         elif model_type == "KMeans":
             self.model = OneClassKMeans(n_clusters=3, threshold_quantile=0.97)
         else:
@@ -68,7 +68,7 @@ class VitalAnomalyDetector:
             
         # Re-initialize the model to clear any pre-trained weights from joblib loading
         if self.model_type == "IsolationForest":
-            self.model = IsolationForest(contamination=0.03, random_state=42)
+            self.model = IsolationForest(contamination='auto', random_state=42)
         elif self.model_type == "KMeans":
             self.model = OneClassKMeans(n_clusters=3, threshold_quantile=0.97)
             
@@ -82,11 +82,17 @@ class VitalAnomalyDetector:
         Predicts if a single vital signs sample is anomalous.
         Returns: True if anomaly, False if normal.
         """
-        if not self.is_trained:
+        if not self.is_trained or self.features_mean is None:
             return False  # Default to normal if not trained
             
         X = np.array([sample])
         X_norm = self.preprocess(X, fit=False)
+        
+        pred = self.model.predict(X_norm)[0]
+        if hasattr(self.model, "score_samples"):
+            score = self.model.score_samples(X_norm)[0]
+            return pred == -1 and score < -0.15
+        return pred == -1
         
         # Use decision function score directly with a small safety margin
         # to avoid false positives on boundary normal samples in small training sets
