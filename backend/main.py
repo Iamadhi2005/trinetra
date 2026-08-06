@@ -67,9 +67,9 @@ def seed_initial_data():
             
         # Seed patients if empty
         if db.query(Patient).count() == 0:
-            db.add(Patient(id="patient_101", name="John Doe", age=52, phone="+1-555-0101", guardian_name="Jane Doe (Spouse)", guardian_phone="+1-555-0102", status="Normal"))
-            db.add(Patient(id="patient_102", name="Robert Smith", age=61, phone="+1-555-0201", guardian_name="Mary Smith (Mother)", guardian_phone="+1-555-0202", status="Normal"))
-            db.add(Patient(id="patient_103", name="Alice Johnson", age=38, phone="+1-555-0301", guardian_name="David Johnson (Father)", guardian_phone="+1-555-0302", status="Normal"))
+            db.add(Patient(id="patient_101", name="John Doe", age=52, phone="+1-555-0101", guardian_name="Jane Doe (Spouse)", guardian_phone="+1-555-0102", status="Normal", is_calibrated=True, calibration_progress=100))
+            db.add(Patient(id="patient_102", name="Robert Smith", age=61, phone="+1-555-0201", guardian_name="Mary Smith (Mother)", guardian_phone="+1-555-0202", status="Normal", is_calibrated=True, calibration_progress=100))
+            db.add(Patient(id="patient_103", name="Alice Johnson", age=38, phone="+1-555-0301", guardian_name="David Johnson (Father)", guardian_phone="+1-555-0302", status="Normal", is_calibrated=True, calibration_progress=100))
             db.commit()
             
         # Seed devices if empty
@@ -200,12 +200,14 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
                 
             hr = p_dev.heart_rate
             spo2 = p_dev.spo2
+            systolic = int(getattr(p_dev, "systolic_bp", 115))
+            diastolic = int(getattr(p_dev, "diastolic_bp", 75))
+            temp = round(getattr(p_dev, "temperature", 36.8), 1)
+            resp = int(getattr(p_dev, "respiration_rate", 16))
             infusion = p_dev.infusion_rate
             battery = p_dev.battery
             status = p_dev.status
-            bp = f"{int(p_dev.systolic_bp)}/{int(p_dev.diastolic_bp)}"
-            temp = round(p_dev.temperature, 1)
-            resp = int(p_dev.respiration_rate)
+            bp = f"{systolic}/{diastolic}"
                 
             ecg_val = generate_pqrst_ecg_point(t_ms, int(hr))
             pleth_val = generate_spo2_pleth_point(t_ms, int(hr))
@@ -213,11 +215,11 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
             payload = {
                 "ecg_voltage": round(ecg_val, 3),
                 "spo2_pleth": round(pleth_val, 3),
-                "heart_rate": int(hr),
+                "heart_rate": int(round(hr)),
                 "spo2": round(spo2, 1),
                 "blood_pressure": bp,
                 "temperature": temp,
-                "respiration_rate": max(8, min(30, resp)),
+                "respiration_rate": max(8, min(40, resp)),
                 "infusion_level": round(infusion, 1),
                 "battery": int(battery),
                 "status": status,

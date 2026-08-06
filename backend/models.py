@@ -28,8 +28,8 @@ class Patient(Base):
     bed_number = Column(String, default="Bed-01")
     doctor_assigned = Column(String, default="Dr. Sarah Connor")
     admission_date = Column(DateTime, default=datetime.datetime.utcnow)
-    is_calibrated = Column(Boolean, default=False)
-    calibration_progress = Column(Integer, default=0)
+    is_calibrated = Column(Boolean, default=True)
+    calibration_progress = Column(Integer, default=100)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     devices = relationship("Device", back_populates="patient", cascade="all, delete-orphan")
