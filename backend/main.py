@@ -181,32 +181,20 @@ def generate_spo2_pleth_point(t_ms: int, bpm: int = 75) -> float:
 async def websocket_telemetry(websocket: WebSocket, patient_id: str):
     await websocket.accept()
     
-    db = SessionLocal()
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
-    db.close()
-    
-    if not patient:
-        await websocket.close(code=4004)
-        return
-        
     t_ms = 0
     try:
         while True:
-            p_dev = global_simulator_service.simulator.patients.get(patient_id)
-            if not p_dev:
-                from patient_simulator import DeviceSimulator
-                p_dev = DeviceSimulator(patient_id)
-                global_simulator_service.simulator.patients[patient_id] = p_dev
+            p_dev = global_simulator_service.simulator.get_or_create_patient(patient_id)
                 
-            hr = p_dev.heart_rate
-            spo2 = p_dev.spo2
+            hr = getattr(p_dev, "heart_rate", 75.0)
+            spo2 = getattr(p_dev, "spo2", 98.0)
             systolic = int(getattr(p_dev, "systolic_bp", 115))
             diastolic = int(getattr(p_dev, "diastolic_bp", 75))
             temp = round(getattr(p_dev, "temperature", 36.8), 1)
             resp = int(getattr(p_dev, "respiration_rate", 16))
-            infusion = p_dev.infusion_rate
-            battery = p_dev.battery
-            status = p_dev.status
+            infusion = getattr(p_dev, "infusion_rate", 5.0)
+            battery = getattr(p_dev, "battery", 98.0)
+            status = getattr(p_dev, "status", getattr(p_dev, "pump_status", "Online"))
             bp = f"{systolic}/{diastolic}"
                 
             ecg_val = generate_pqrst_ecg_point(t_ms, int(hr))
@@ -232,7 +220,7 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
             
     except WebSocketDisconnect:
         pass
-    except Exception:
+    except Exception as e:
         pass
 
 @app.on_event("startup")

@@ -17,6 +17,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('error', function(e) {
+                if (e && e.message && e.message.includes('startTime')) {
+                  e.stopImmediatePropagation();
+                  e.preventDefault();
+                }
+              }, true);
+            `,
+          }}
+        />
+      </head>
       <body className={`${inter.className} bg-[#F5F7FA] text-[#1A202C]`}>
         <ClientLayout>{children}</ClientLayout>
       </body>

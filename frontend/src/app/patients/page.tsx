@@ -38,7 +38,7 @@ export default function PatientsPage() {
   const [guardianPhone, setGuardianPhone] = useState("");
   const [wardNumber, setWardNumber] = useState("ICU-A");
   const [bedNumber, setBedNumber] = useState("Bed-01");
-  const [doctorAssigned, setDoctorAssigned] = useState("Dr. Sarah Connor");
+  const [doctorAssigned, setDoctorAssigned] = useState("Dr. Radhi");
   const [devices, setDevices] = useState("ECG Monitor, Pulse Oximeter");
   const [photo, setPhoto] = useState<File | null>(null);
 
@@ -211,13 +211,19 @@ export default function PatientsPage() {
               <label className="block text-xs font-semibold text-[#4A5568] mb-1">
                 Assigned Doctor
               </label>
-              <input
-                type="text"
-                placeholder="Dr. Sarah Connor"
+              <select
                 value={doctorAssigned}
                 onChange={(e) => setDoctorAssigned(e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
-              />
+              >
+                <option value="Dr. Radhi">Dr. Radhi</option>
+                <option value="Dr. Reena">Dr. Reena</option>
+                <option value="Dr. Arjun">Dr. Arjun</option>
+                <option value="Dr. Vijay">Dr. Vijay</option>
+                <option value="Dr. Rocky">Dr. Rocky</option>
+                <option value="Dr. Tejaswini">Dr. Tejaswini</option>
+                <option value="Dr. Nilofer">Dr. Nilofer</option>
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#4A5568] mb-1">

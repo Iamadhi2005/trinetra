@@ -97,7 +97,13 @@ export default function DashboardPage() {
     });
 
     return () => {
-      Object.values(sockets).forEach((ws) => ws.close());
+      Object.values(sockets).forEach((ws) => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.onopen = () => ws.close();
+        } else if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      });
     };
   }, [patients, mounted]);
 

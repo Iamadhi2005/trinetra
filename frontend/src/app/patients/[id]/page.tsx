@@ -242,7 +242,13 @@ export default function PatientConsolePage() {
     }, 20);
 
     return () => {
-      if (ws) ws.close();
+      if (ws) {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.onopen = () => ws.close();
+        } else if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      }
       clearInterval(timer);
     };
   }, [patientId]);
@@ -537,23 +543,11 @@ export default function PatientConsolePage() {
               onClick={() => setIsFullscreen(true)}
             />
 
-<<<<<<< HEAD
             {/* Right Yellow SpO2 Readout - Exact Match */}
             <div className="w-[140px] text-right flex-shrink-0 flex flex-col justify-between h-full pl-4">
               <div className="text-xs text-[#FFFF33] font-bold leading-tight">
                 <div>SpO2</div>
                 <div>%</div>
-=======
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-[#E8F8F5] border border-[#A3E4D7] p-3 rounded flex items-center justify-between">
-                <div>
-                  <span className="text-[#16A085] font-bold">HR</span>
-                  <div className="text-lg font-bold text-[#117A65] mt-1">
-                    {vitals?.heart_rate ?? "--"} <span className="text-xs font-normal">bpm</span>
-                  </div>
-                </div>
-                <Heart className="w-5 h-5 text-[#16A085] fill-current animate-pulse" />
->>>>>>> 466906b (Fix live real-time telemetry streaming, BPM-synchronized ECG wave frequency, and auto-demo auth)
               </div>
               <div className="text-7xl font-extrabold text-[#FFFF33] tracking-tighter leading-none my-auto font-sans">
                 {vitals?.spo2 || "--"}
@@ -561,7 +555,6 @@ export default function PatientConsolePage() {
             </div>
           </div>
 
-<<<<<<< HEAD
           {/* Lower Parameter Row */}
           <div className="grid grid-cols-4 gap-4 border-t border-gray-900 pt-4 text-xs">
             <div>
@@ -579,57 +572,6 @@ export default function PatientConsolePage() {
             <div>
               <span className="text-blue-400 font-bold block text-[11px]">INFUSION (mL)</span>
               <span className="text-2xl font-bold text-blue-400">{vitals?.infusion_level || "--"}</span>
-=======
-              <div className="bg-[#EBF5FB] border border-[#AED6F1] p-3 rounded flex items-center justify-between">
-                <div>
-                  <span className="text-[#2980B9] font-bold">SpO₂</span>
-                  <div className="text-lg font-bold text-[#1B4F72] mt-1">
-                    {vitals?.spo2 ?? "--"} <span className="text-xs font-normal">%</span>
-                  </div>
-                </div>
-                <Droplet className="w-5 h-5 text-[#2980B9]" />
-              </div>
-
-              <div className="bg-[#FDEDEC] border border-[#FADBD8] p-3 rounded flex items-center justify-between">
-                <div>
-                  <span className="text-[#C0392B] font-bold">NIBP</span>
-                  <div className="text-lg font-bold text-[#78281F] mt-1">
-                    {vitals?.blood_pressure ?? "--"} <span className="text-[10px] font-normal">mmHg</span>
-                  </div>
-                </div>
-                <Layers className="w-5 h-5 text-[#C0392B]" />
-              </div>
-
-              <div className="bg-[#FEF9E7] border border-[#F9E79F] p-3 rounded flex items-center justify-between">
-                <div>
-                  <span className="text-[#D35400] font-bold">TEMP</span>
-                  <div className="text-lg font-bold text-[#7E5109] mt-1">
-                    {vitals?.temperature ?? "--"} <span className="text-xs font-normal">°C</span>
-                  </div>
-                </div>
-                <Thermometer className="w-5 h-5 text-[#D35400]" />
-              </div>
-
-              <div className="bg-[#F4ECF7] border border-[#D7BDE2] p-3 rounded flex items-center justify-between">
-                <div>
-                  <span className="text-[#8E44AD] font-bold">RESP</span>
-                  <div className="text-lg font-bold text-[#4A235A] mt-1">
-                    {vitals?.respiration_rate ?? "--"} <span className="text-xs font-normal">/min</span>
-                  </div>
-                </div>
-                <Wind className="w-5 h-5 text-[#8E44AD]" />
-              </div>
-
-              <div className="bg-[#F8FAFC] border border-[#CBD5E0] p-3 rounded flex items-center justify-between col-span-2">
-                <div>
-                  <span className="text-[#4A5568] font-bold">INFUSION LEVEL</span>
-                  <div className="text-lg font-bold text-[#0F172A] mt-1">
-                    {vitals?.infusion_level ?? "--"} <span className="text-xs font-normal">mL</span>
-                  </div>
-                </div>
-                <span className="text-xs font-semibold text-[#2ECC71]">● Streaming</span>
-              </div>
->>>>>>> 466906b (Fix live real-time telemetry streaming, BPM-synchronized ECG wave frequency, and auto-demo auth)
             </div>
           </div>
         </div>

@@ -26,7 +26,7 @@ class Patient(Base):
     blood_group = Column(String, default="O+")
     ward_number = Column(String, default="ICU-A")
     bed_number = Column(String, default="Bed-01")
-    doctor_assigned = Column(String, default="Dr. Sarah Connor")
+    doctor_assigned = Column(String, default="Dr. Radhi")
     admission_date = Column(DateTime, default=datetime.datetime.utcnow)
     is_calibrated = Column(Boolean, default=True)
     calibration_progress = Column(Integer, default=100)

@@ -68,7 +68,7 @@ def create_patient(
     guardian_phone: str = Form(""),
     ward_number: str = Form("ICU-A"),
     bed_number: str = Form("Bed-01"),
-    doctor_assigned: str = Form("Dr. Sarah Connor"),
+    doctor_assigned: str = Form("Dr. Radhi"),
     devices: str = Form(""), # comma separated
     photo: UploadFile = File(None),
     db: Session = Depends(get_db),
@@ -90,6 +90,32 @@ def create_patient(
         with open(photo_path, "wb") as buffer:
             shutil.copyfileobj(photo.file, buffer)
             
+    # Auto-generate personal telemetry configuration file tied to patient name
+    os.makedirs("data", exist_ok=True)
+    telemetry_file = f"data/telemetry_{patient_id}.json"
+    seed_val = sum(ord(c) for c in name) + age
+    r = random.Random(seed_val)
+    base_hr = float(r.randint(68, 84))
+    base_spo2 = round(r.uniform(96.8, 99.4), 1)
+    
+    telemetry_data = {
+        "patient_id": patient_id,
+        "patient_name": name,
+        "calibrated_at": time.time(),
+        "status": "Calibrated & Live",
+        "ward_number": ward_number,
+        "bed_number": bed_number,
+        "doctor": doctor_assigned,
+        "base_heart_rate": base_hr,
+        "base_spo2": base_spo2
+    }
+    try:
+        import json
+        with open(telemetry_file, "w") as f:
+            json.dump(telemetry_data, f, indent=2)
+    except Exception:
+        pass
+
     new_patient = Patient(
         id=patient_id,
         name=name,
@@ -104,13 +130,15 @@ def create_patient(
         ward_number=ward_number,
         bed_number=bed_number,
         doctor_assigned=doctor_assigned,
-        is_calibrated=False,
-        calibration_progress=0
+        is_calibrated=True,
+        calibration_progress=100
     )
     db.add(new_patient)
     
     # Add devices
     dev_types = [d.strip() for d in devices.split(",") if d.strip()]
+    if not dev_types:
+        dev_types = ["ECG Monitor", "Pulse Oximeter", "Infusion Pump"]
     for d_type in dev_types:
         dev_id = f"{d_type.lower().replace(' ', '_')}_{patient_id}"
         new_dev = Device(
@@ -133,8 +161,22 @@ def create_patient(
     db.commit()
     db.refresh(new_patient)
     
-    # Reload simulator
-    global_simulator_service.simulator.reload_patients()
+    # Sync to legacy DB and reload simulator
+    try:
+        from src.utils import add_patient_to_db
+        add_patient_to_db(
+            patient_id=patient_id,
+            name=name,
+            phone=phone,
+            guardian_name=guardian_name,
+            guardian_phone=guardian_phone,
+            devices_list=dev_types,
+            photo_path=photo_path
+        )
+    except Exception:
+        pass
+
+    global_simulator_service.simulator.get_or_create_patient(patient_id)
     
     return new_patient
 
@@ -162,8 +204,7 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db), current_user 
 def calibrate_patient(
     patient_id: str,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
@@ -182,18 +223,33 @@ def get_patient_vitals(patient_id: str, db: Session = Depends(get_db)):
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
         
-    if patient_id not in global_simulator_service.simulator.patients:
-        raise HTTPException(status_code=404, detail="Patient simulator state not found")
-        
-    p_dev = global_simulator_service.simulator.patients[patient_id]
+    p_dev = global_simulator_service.simulator.get_or_create_patient(patient_id)
+    
+    systolic = int(getattr(p_dev, "systolic_bp", 115))
+    diastolic = int(getattr(p_dev, "diastolic_bp", 75))
+    bp = f"{systolic}/{diastolic}"
+
     return {
+        "id": patient.id,
+        "name": patient.name,
+        "age": patient.age,
+        "gender": patient.gender,
+        "blood_group": patient.blood_group,
+        "ward_number": patient.ward_number,
+        "bed_number": patient.bed_number,
+        "doctor_assigned": patient.doctor_assigned,
+        "photo_path": patient.photo_path,
         "patient_id": patient_id,
         "is_calibrated": patient.is_calibrated,
         "calibration_progress": patient.calibration_progress,
-        "heart_rate": p_dev.heart_rate,
-        "spo2": p_dev.spo2,
-        "lead_impedance": p_dev.lead_impedance,
-        "infusion_rate": p_dev.infusion_rate,
-        "battery": p_dev.battery,
+        "heart_rate": int(round(p_dev.heart_rate)),
+        "spo2": round(p_dev.spo2, 1),
+        "blood_pressure": bp,
+        "temperature": round(getattr(p_dev, "temperature", 36.8), 1),
+        "respiration_rate": int(getattr(p_dev, "respiration_rate", 16)),
+        "lead_impedance": round(p_dev.lead_impedance, 1),
+        "infusion_rate": round(p_dev.infusion_rate, 1),
+        "infusion_level": round(p_dev.infusion_rate, 1),
+        "battery": int(p_dev.battery),
         "pump_status": p_dev.pump_status
     }

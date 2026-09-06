@@ -41,7 +41,7 @@ class PatientBase(BaseModel):
     blood_group: Optional[str] = "O+"
     ward_number: Optional[str] = "ICU-A"
     bed_number: Optional[str] = "Bed-01"
-    doctor_assigned: Optional[str] = "Dr. Sarah Connor"
+    doctor_assigned: Optional[str] = "Dr. Radhi"
     is_calibrated: Optional[bool] = False
     calibration_progress: Optional[int] = 0
 
