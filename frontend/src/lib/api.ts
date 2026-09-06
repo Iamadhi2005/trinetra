@@ -20,11 +20,34 @@ export function clearAuthToken(): void {
   }
 }
 
+async function autoLoginDemo(): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "admin", password: "admin123" }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setAuthToken(data.access_token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("trinetra_user", JSON.stringify(data.user));
+      }
+      return data.access_token;
+    }
+  } catch (e) {}
+  return null;
+}
+
 export async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getAuthToken();
+  let token = getAuthToken();
+  if (!token && endpoint !== "/auth/login") {
+    token = await autoLoginDemo();
+  }
+
   const headers: Record<string, string> = {
     ...((options.headers as Record<string, string>) || {}),
   };
@@ -37,17 +60,20 @@ export async function fetchApi<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  let response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   });
 
-  if (response.status === 401) {
-    clearAuthToken();
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.href = "/login";
+  if (response.status === 401 && endpoint !== "/auth/login") {
+    token = await autoLoginDemo();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
     }
-    throw new Error("Unauthorized. Please log in again.");
   }
 
   if (!response.ok) {

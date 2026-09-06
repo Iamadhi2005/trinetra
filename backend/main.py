@@ -71,9 +71,9 @@ def seed_initial_data():
             
         # Seed patients if empty
         if db.query(Patient).count() == 0:
-            db.add(Patient(id="patient_101", name="John Doe", age=52, phone="+1-555-0101", guardian_name="Jane Doe (Spouse)", guardian_phone="+1-555-0102", status="Normal"))
-            db.add(Patient(id="patient_102", name="Robert Smith", age=61, phone="+1-555-0201", guardian_name="Mary Smith (Mother)", guardian_phone="+1-555-0202", status="Normal"))
-            db.add(Patient(id="patient_103", name="Alice Johnson", age=38, phone="+1-555-0301", guardian_name="David Johnson (Father)", guardian_phone="+1-555-0302", status="Normal"))
+            db.add(Patient(id="patient_101", name="John Doe", age=52, phone="+1-555-0101", guardian_name="Jane Doe (Spouse)", guardian_phone="+1-555-0102", status="Normal", is_calibrated=True, calibration_progress=100))
+            db.add(Patient(id="patient_102", name="Robert Smith", age=61, phone="+1-555-0201", guardian_name="Mary Smith (Mother)", guardian_phone="+1-555-0202", status="Normal", is_calibrated=True, calibration_progress=100))
+            db.add(Patient(id="patient_103", name="Alice Johnson", age=38, phone="+1-555-0301", guardian_name="David Johnson (Father)", guardian_phone="+1-555-0302", status="Normal", is_calibrated=True, calibration_progress=100))
             db.commit()
             
         # Seed devices if empty
@@ -189,31 +189,21 @@ def generate_spo2_pleth_point(t_ms: int, bpm: int = 75) -> float:
 async def websocket_telemetry(websocket: WebSocket, patient_id: str):
     await websocket.accept()
     
-    db = SessionLocal()
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
-    db.close()
-    
-    if not patient:
-        await websocket.close(code=4004)
-        return
-        
     t_ms = 0
     try:
         while True:
-            p_dev = global_simulator_service.simulator.patients.get(patient_id)
-            if not p_dev:
-                from patient_simulator import DeviceSimulator
-                p_dev = DeviceSimulator(patient_id)
-                global_simulator_service.simulator.patients[patient_id] = p_dev
+            p_dev = global_simulator_service.simulator.get_or_create_patient(patient_id)
                 
-            hr = p_dev.heart_rate
-            spo2 = p_dev.spo2
-            infusion = p_dev.infusion_rate
-            battery = p_dev.battery
-            status = p_dev.status
-            bp = f"{int(p_dev.systolic_bp)}/{int(p_dev.diastolic_bp)}"
-            temp = round(p_dev.temperature, 1)
-            resp = int(p_dev.respiration_rate)
+            hr = getattr(p_dev, "heart_rate", 75.0)
+            spo2 = getattr(p_dev, "spo2", 98.0)
+            systolic = int(getattr(p_dev, "systolic_bp", 115))
+            diastolic = int(getattr(p_dev, "diastolic_bp", 75))
+            temp = round(getattr(p_dev, "temperature", 36.8), 1)
+            resp = int(getattr(p_dev, "respiration_rate", 16))
+            infusion = getattr(p_dev, "infusion_rate", 5.0)
+            battery = getattr(p_dev, "battery", 98.0)
+            status = getattr(p_dev, "status", getattr(p_dev, "pump_status", "Online"))
+            bp = f"{systolic}/{diastolic}"
                 
             ecg_val = generate_pqrst_ecg_point(t_ms, int(hr))
             pleth_val = generate_spo2_pleth_point(t_ms, int(hr))
@@ -221,11 +211,11 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
             payload = {
                 "ecg_voltage": round(ecg_val, 3),
                 "spo2_pleth": round(pleth_val, 3),
-                "heart_rate": int(hr),
+                "heart_rate": int(round(hr)),
                 "spo2": round(spo2, 1),
                 "blood_pressure": bp,
                 "temperature": temp,
-                "respiration_rate": max(8, min(30, resp)),
+                "respiration_rate": max(8, min(40, resp)),
                 "infusion_level": round(infusion, 1),
                 "pacing_rate": int(p_dev.pacing_rate),
                 "battery": int(battery),
@@ -239,7 +229,7 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
             
     except WebSocketDisconnect:
         pass
-    except Exception:
+    except Exception as e:
         pass
 
 @app.on_event("startup")

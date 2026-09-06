@@ -97,7 +97,13 @@ export default function DashboardPage() {
     });
 
     return () => {
-      Object.values(sockets).forEach((ws) => ws.close());
+      Object.values(sockets).forEach((ws) => {
+        if (ws.readyState === WebSocket.CONNECTING) {
+          ws.onopen = () => ws.close();
+        } else if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      });
     };
   }, [patients, mounted]);
 
@@ -105,8 +111,13 @@ export default function DashboardPage() {
     return <div className="text-xs text-[#718096]">Loading central telemetry station...</div>;
   }
 
+  if (!mounted) {
+    return <div className="text-xs text-[#718096]">Loading central telemetry station...</div>;
+  }
+
   const activeMonitoringCount = Object.values(liveVitals).filter(v => v.is_calibrated).length;
   const criticalPatientsCount = Object.values(liveVitals).filter(v => v.heart_rate > 100 || v.heart_rate < 55 || v.spo2 < 93).length;
+
 
   return (
     <div className="space-y-6">

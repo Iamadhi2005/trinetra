@@ -73,6 +73,7 @@ def log_security_event(timestamp, device_id, attack_type, client_ip, status, act
     """
     Logs a security alert or bypass event into the database.
     """
+    init_db(db_path)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("""
@@ -86,6 +87,7 @@ def get_security_logs(db_path="data/audit_log.db"):
     """
     Retrieves all logged security events as a Pandas DataFrame.
     """
+    init_db(db_path)
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query("SELECT * FROM security_logs ORDER BY id DESC", conn)
     conn.close()
@@ -95,6 +97,7 @@ def add_patient_to_db(patient_id, name, phone, guardian_name, guardian_phone, de
     """
     Saves a new patient profile into the SQLite database.
     """
+    init_db(db_path)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     devices_str = ",".join(devices_list)
@@ -109,7 +112,9 @@ def get_patients_from_db(db_path="data/audit_log.db"):
     """
     Loads all patient profiles from the SQLite database.
     """
+    init_db(db_path)
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query("SELECT * FROM patients", conn)
     conn.close()
     return df
+

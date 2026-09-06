@@ -13,12 +13,26 @@ class DeviceSimulator:
     def __init__(self, patient_id):
         self.patient_id = patient_id
         
+        # Check if custom telemetry calibration config exists
+        telemetry_file = f"data/telemetry_{patient_id}.json"
+        base_hr = None
+        base_spo2 = None
+        if os.path.exists(telemetry_file):
+            try:
+                import json
+                with open(telemetry_file, "r") as f:
+                    tdata = json.load(f)
+                    base_hr = tdata.get("base_heart_rate")
+                    base_spo2 = tdata.get("base_spo2")
+            except Exception:
+                pass
+
         # Unique deterministic physiological baseline per patient_id
         seed_val = sum(ord(c) for c in str(patient_id))
         r = random.Random(seed_val)
         
-        self.heart_rate = float(r.randint(68, 86))
-        self.spo2 = round(r.uniform(96.5, 99.2), 1)
+        self.heart_rate = float(base_hr) if base_hr is not None else float(r.randint(68, 86))
+        self.spo2 = float(base_spo2) if base_spo2 is not None else round(r.uniform(96.5, 99.2), 1)
         self.lead_impedance = float(r.randint(480, 520))
         self.pacing_rate = float(r.randint(65, 75))
         self.battery = float(r.randint(92, 100))
@@ -26,6 +40,7 @@ class DeviceSimulator:
         self.infusion_rate = 5.0
         self.infused_volume = float(r.randint(80, 250))
         self.pump_status = "Pumping Normal"
+        self.status = "Online"
         
         self.systolic_bp = float(r.randint(110, 126))
         self.diastolic_bp = float(r.randint(70, 82))
@@ -118,31 +133,49 @@ class PatientSimulator:
         self.reload_patients()
         
     def reload_patients(self):
-        """Loads or reloads patient device simulators from SQLite database records."""
-        from src.utils import get_patients_from_db, add_patient_to_db
+        """Loads or reloads patient device simulators from database records."""
+        all_patient_ids = set()
+        
+        # 1. Fetch from SQLAlchemy DB (trinetra.db)
         try:
-            df = get_patients_from_db()
+            from backend.database import SessionLocal
+            from backend.models import Patient as DBPatient
+            db = SessionLocal()
+            db_patients = db.query(DBPatient).all()
+            for p in db_patients:
+                all_patient_ids.add(p.id)
+            db.close()
         except Exception:
-            df = pd.DataFrame() # empty fallback
+            pass
             
-        if df.empty:
-            # Seed default clinical patients if DB is empty
-            os.makedirs("data/photos", exist_ok=True)
-            add_patient_to_db("patient_101", "John Doe", "+1-555-0101", "Jane Doe (Spouse)", "+1-555-0102", ["ECG Monitor", "Pulse Oximeter", "Pacemaker", "Infusion Pump"], "data/photos/patient_101.png")
-            add_patient_to_db("patient_102", "Robert Smith", "+1-555-0201", "Mary Smith (Mother)", "+1-555-0202", ["ECG Monitor", "Pulse Oximeter", "Infusion Pump"], "")
-            add_patient_to_db("patient_103", "Alice Johnson", "+1-555-0301", "David Johnson (Father)", "+1-555-0302", ["ECG Monitor", "Pulse Oximeter", "Pacemaker"], "")
+        # 2. Fetch from legacy SQLite DB (audit_log.db)
+        try:
+            from src.utils import get_patients_from_db, add_patient_to_db
             df = get_patients_from_db()
-            
+            if df.empty:
+                os.makedirs("data/photos", exist_ok=True)
+                add_patient_to_db("patient_101", "John Doe", "+1-555-0101", "Jane Doe (Spouse)", "+1-555-0102", ["ECG Monitor", "Pulse Oximeter", "Pacemaker", "Infusion Pump"], "data/photos/patient_101.png")
+                add_patient_to_db("patient_102", "Robert Smith", "+1-555-0201", "Mary Smith (Mother)", "+1-555-0202", ["ECG Monitor", "Pulse Oximeter", "Infusion Pump"], "")
+                add_patient_to_db("patient_103", "Alice Johnson", "+1-555-0301", "David Johnson (Father)", "+1-555-0302", ["ECG Monitor", "Pulse Oximeter", "Pacemaker"], "")
+                df = get_patients_from_db()
+            for _, row in df.iterrows():
+                all_patient_ids.add(row['patient_id'])
+        except Exception:
+            pass
+
         # Update simulator objects
         new_patients = {}
-        for _, row in df.iterrows():
-            p_id = row['patient_id']
-            # Retain existing simulator states (vitals, buffers) if already running
+        for p_id in all_patient_ids:
             if p_id in self.patients:
                 new_patients[p_id] = self.patients[p_id]
             else:
                 new_patients[p_id] = DeviceSimulator(p_id)
         self.patients = new_patients
+
+    def get_or_create_patient(self, patient_id: str) -> DeviceSimulator:
+        if patient_id not in self.patients:
+            self.patients[patient_id] = DeviceSimulator(patient_id)
+        return self.patients[patient_id]
         
     def set_attack_mode(self, patient_id, mode, ips_disabled):
         if patient_id in self.patients:
