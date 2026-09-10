@@ -82,12 +82,15 @@ class DeviceResponse(DeviceBase):
 class AlertResponse(BaseModel):
     id: int
     timestamp: datetime.datetime
-    device_id: Optional[str]
-    patient_id: Optional[str]
+    device_id: Optional[str] = None
+    device_name: Optional[str] = None
+    device_type: Optional[str] = None
+    patient_id: Optional[str] = None
+    patient_name: Optional[str] = None
     severity: str
     message: str
     status: str
-    resolution_notes: Optional[str]
+    resolution_notes: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -118,6 +121,23 @@ class SecurityEventResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# Active Attack metadata for Dashboard
+class ActiveAttackInfo(BaseModel):
+    is_active: bool = False
+    attack_mode: str = "Normal"
+    attack_label: str = "Normal Baseline"
+    severity: str = "Normal"
+    target_patient_id: Optional[str] = None
+    target_patient_name: Optional[str] = None
+    ward_number: Optional[str] = None
+    bed_number: Optional[str] = None
+    target_device_id: Optional[str] = None
+    target_device_name: Optional[str] = None
+    target_device_type: Optional[str] = None
+    alert_message: Optional[str] = None
+    action_taken: Optional[str] = None
+    timestamp: float = 0.0
+
 # Dashboard Response
 class DashboardMetrics(BaseModel):
     active_devices: int
@@ -127,3 +147,6 @@ class DashboardMetrics(BaseModel):
     threat_level: str
     network_health: str
     uptime: str
+    active_attack: Optional[ActiveAttackInfo] = None
+    recent_alerts: Optional[List[AlertResponse]] = []
+

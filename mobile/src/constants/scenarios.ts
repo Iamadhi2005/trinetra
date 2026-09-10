@@ -1,0 +1,77 @@
+import { AttackScenario } from "../types";
+
+export const ATTACK_SCENARIOS: AttackScenario[] = [
+  // Layer 1 Medical & Physiology Scenarios
+  {
+    mode: "Override",
+    label: "Pacemaker & Infusion Override",
+    category: "Layer 1: Medical & Physiology",
+    target: "Pacemaker (Pacing Rate) & Infusion Pump",
+    severity: "CRITICAL",
+    desc: "Abnormal pacing rate spikes and lethal medication over-infusion",
+    reportScenario: "Table 6: Pacemaker / Pump Override",
+    payloadEffect: "Forces Pacing=180 ppm, Infusion=500 mL/h (HR=190 bpm, BP drops to 50 mmHg). Triggers IPS KVO safety fallback.",
+  },
+  {
+    mode: "Drain",
+    label: "Battery Depletion Exploit",
+    category: "Layer 1: Medical & Physiology",
+    target: "Internal Lithium Power Subsystem",
+    severity: "HIGH",
+    desc: "Simulates continuous high-draw cycles draining battery at 5%/s",
+    reportScenario: "Table 6: Battery Drain",
+    payloadEffect: "Induces sudden critical battery drop down to 0% to test device failover & backup telemetry alarms.",
+  },
+  {
+    mode: "Fault",
+    label: "Sensor Detachment (Loose Lead Fault)",
+    category: "Layer 1: Medical & Physiology",
+    target: "ECG Lead II Biosensor Hardware",
+    severity: "WARNING",
+    desc: "Electrode contact failure and high impedance fault injection",
+    reportScenario: "Table 6: Sensor Detachment / Failure",
+    payloadEffect: "Spikes lead impedance to 10,000 Ω. Layer 1 flags sensor fault and alerts nursing station without blocking patient.",
+  },
+
+  // Layer 2 Network & Protocol Scenarios
+  {
+    mode: "DoS",
+    label: "DoS Volumetric Packet Flood",
+    category: "Layer 2: Network & Protocol",
+    target: "Telemetry Broker & Ingestion Queue",
+    severity: "HIGH",
+    desc: "High-rate telemetry stream exceeding 20 packets/sec buffer limit",
+    reportScenario: "Table 6: DoS Packet Flood",
+    payloadEffect: "Floods message broker with 450-byte telemetry packets exceeding 20 pkts/s to verify IPS rate-limiting & quarantine.",
+  },
+  {
+    mode: "MitM",
+    label: "Telemetry Spoofing / MitM",
+    category: "Layer 2: Network & Protocol",
+    target: "HMAC-SHA256 Cryptographic Signature",
+    severity: "CRITICAL",
+    desc: "In-transit payload alteration and cryptographic signature tampering",
+    reportScenario: "Table 6: Man-in-the-Middle Spoofing",
+    payloadEffect: "Corrupts cryptographic HMAC signature keys and injects forged physiological vitals into the channel.",
+  },
+  {
+    mode: "Replay",
+    label: "Replay / Stale Data Injection",
+    category: "Layer 2: Network & Protocol",
+    target: "Timestamp Latency & Replay Window",
+    severity: "HIGH",
+    desc: "Retransmission of historical packets (>3000ms old) to mask crisis",
+    reportScenario: "Table 6: Replay / Stale Payload",
+    payloadEffect: "Captures and replays historical telemetry packets to test anti-replay sliding timestamp window verification.",
+  },
+  {
+    mode: "BruteForce",
+    label: "Brute-Force Authentication Attack",
+    category: "Layer 2: Network & Protocol",
+    target: "IoMT API Gateway Auth Service",
+    severity: "CRITICAL",
+    desc: "Rapid credential-stuffing and forged JWT token access attempts",
+    reportScenario: "Table 6: Gateway Brute-Force",
+    payloadEffect: "Transmits rapid unauthorized authorization attempts to evaluate API rate-limiting and audit alerting.",
+  },
+];

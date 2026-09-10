@@ -13,6 +13,10 @@ import {
   Move,
   ArrowLeft,
   CheckCircle2,
+  Activity,
+  Radio,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 interface PatientDetails {
@@ -25,11 +29,15 @@ interface PatientDetails {
   bed_number: string;
   doctor_assigned: string;
   photo_path: string;
+  admission_date?: string;
+  telemetry_file?: string;
   is_calibrated: boolean;
   calibration_progress: number;
 }
 
 interface TelemetryPoint {
+  patient_id?: string;
+  telemetry_file?: string;
   ecg_voltage: number;
   spo2_pleth: number;
   heart_rate: number;
@@ -44,10 +52,21 @@ interface TelemetryPoint {
   timestamp: number;
 }
 
-export default function PatientConsolePage() {
-  const params = useParams();
+export default function PatientConsolePage(props: { params?: Promise<{ id: string }> | { id: string } }) {
+  const routeParams = useParams();
+  let patientId = (routeParams?.id as string) || "";
+  if (!patientId && props?.params) {
+    if (typeof (props.params as any)?.then === "function") {
+      try {
+        const unwrapped = React.use(props.params as Promise<{ id: string }>);
+        patientId = unwrapped?.id || "";
+      } catch (e) {}
+    } else {
+      patientId = (props.params as { id: string })?.id || "";
+    }
+  }
+
   const router = useRouter();
-  const patientId = params.id as string;
 
   const [patient, setPatient] = useState<PatientDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,23 +98,28 @@ export default function PatientConsolePage() {
 
   // Load Patient profile
   const loadPatientProfile = async () => {
+    if (!patientId || patientId === "undefined") return;
     try {
       const data = await fetchApi<PatientDetails>(`/patients/${patientId}/vitals`);
       setPatient(data as any);
-      const details = await fetchApi<any>("/patients");
-      const matched = details.find((p: any) => p.id === patientId);
-      if (matched) {
-        setPatient((prev) => (prev ? { ...prev, ...matched } : matched));
-      }
+      try {
+        const details = await fetchApi<any>("/patients");
+        const matched = details.find((p: any) => p.id === patientId);
+        if (matched) {
+          setPatient((prev) => (prev ? { ...prev, ...matched, is_calibrated: data.is_calibrated, calibration_progress: data.calibration_progress } : matched));
+        }
+      } catch (err) {}
     } catch (e) {
-      router.push("/patients");
+      console.warn("Could not load patient vitals:", e);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadPatientProfile();
+    if (patientId && patientId !== "undefined") {
+      loadPatientProfile();
+    }
   }, [patientId]);
 
   // Trigger Device Calibration / Recalibration
@@ -105,15 +129,19 @@ export default function PatientConsolePage() {
     try {
       await fetchApi(`/patients/${patientId}/calibrate`, { method: "POST" });
       const interval = setInterval(async () => {
-        const stats = await fetchApi<PatientDetails>(`/patients/${patientId}/vitals`);
-        setProgress(stats.calibration_progress);
-        if (stats.is_calibrated || stats.calibration_progress >= 100) {
-          clearInterval(interval);
-          setCalibrating(false);
-          setPatient((prev) => (prev ? { ...prev, is_calibrated: true, calibration_progress: 100 } : null));
-          loadPatientProfile();
-        }
-      }, 1000);
+        try {
+          const stats = await fetchApi<PatientDetails>(`/patients/${patientId}/vitals`);
+          const currentProgress = stats.calibration_progress !== undefined ? stats.calibration_progress : 0;
+          setProgress(currentProgress);
+          if (stats.is_calibrated || currentProgress >= 100) {
+            clearInterval(interval);
+            setProgress(100);
+            setCalibrating(false);
+            setPatient((prev) => (prev ? { ...prev, is_calibrated: true, calibration_progress: 100 } : null));
+            loadPatientProfile();
+          }
+        } catch (pollErr) {}
+      }, 350);
     } catch (err) {
       setCalibrating(false);
     }
@@ -244,10 +272,11 @@ export default function PatientConsolePage() {
 
     return () => {
       if (ws) {
-        if (ws.readyState === WebSocket.CONNECTING) {
-          ws.onopen = () => ws.close();
-        } else if (ws.readyState === WebSocket.OPEN) {
-          ws.close();
+        const activeWs = ws;
+        if (activeWs.readyState === WebSocket.CONNECTING) {
+          activeWs.onopen = () => activeWs.close();
+        } else if (activeWs.readyState === WebSocket.OPEN) {
+          activeWs.close();
         }
       }
       clearInterval(timer);
@@ -276,6 +305,9 @@ export default function PatientConsolePage() {
       }
     }
 
+    // Draw Crisp Lime Green ECG Wave Line from Raw Backend PQRST Points
+    ctx.strokeStyle = "#39FF14";
+    ctx.lineWidth = 2.5;
     ctx.lineJoin = "round";
     ctx.shadowColor = "#39FF14";
     ctx.shadowBlur = 4;
@@ -293,7 +325,7 @@ export default function PatientConsolePage() {
       }
     });
     ctx.stroke();
-  }, [waveHistory, isFullscreen]);
+  }, [waveHistory, isFullscreen, patient?.is_calibrated]);
 
   // Plot Raw Backend SpO2 Pleth Wave Points onto Bottom Canvas (Warm Yellow)
   useEffect(() => {
@@ -337,7 +369,7 @@ export default function PatientConsolePage() {
       }
     });
     ctx.stroke();
-  }, [waveHistory, isFullscreen]);
+  }, [waveHistory, isFullscreen, patient?.is_calibrated]);
 
   // Fullscreen Rendering Engine from Raw Backend Points
   useEffect(() => {
@@ -456,7 +488,7 @@ export default function PatientConsolePage() {
               Gender: <b>{patient?.gender}</b> | Blood Group: <b>{patient?.blood_group}</b> | Doctor: <b>{patient?.doctor_assigned}</b>
             </div>
             <div className="text-xs text-[#718096]">
-              Location: <b>Ward {patient?.ward_number} / Bed {patient?.bed_number}</b>
+              Location: <b>Ward {patient?.ward_number} / Bed {patient?.bed_number}</b> | Admitted: <b>{patient?.admission_date ? new Date(patient.admission_date).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Recently"}</b>
             </div>
           </div>
         </div>
@@ -500,17 +532,171 @@ export default function PatientConsolePage() {
         </div>
       </div>
 
-      {/* Main Screen: 1:1 Visual Replica of Bedside ICU Patient Monitor */}
-      {!patient?.is_calibrated ? (
-        <div className="bg-white border border-dashed border-[#CBD5E0] rounded-lg p-16 text-center shadow-sm space-y-4">
-          <div className="text-5xl animate-pulse">🔌</div>
-          <h2 className="text-lg font-bold text-[#4A5568]">Waiting for Device Connection</h2>
-          <p className="text-xs text-[#718096] max-w-md mx-auto">
-            This patient's physiological telemetry has not been calibrated yet. Please click the "Calibrate Medical Device" button above to generate personal telemetry configuration file and establish live streaming link.
-          </p>
+      {/* Main Screen: 1:1 Visual Replica of Bedside ICU Patient Monitor OR Interactive Calibration Terminal */}
+      {loading ? (
+        <div className="bg-[#000000] p-12 rounded-lg border border-gray-800 text-center text-gray-400 font-mono text-xs flex items-center justify-center gap-2 min-h-[500px]">
+          <Loader2 className="w-5 h-5 animate-spin text-[#39FF14]" />
+          <span>Synchronizing Telemetry Waveform Feed...</span>
         </div>
+      ) : !patient?.is_calibrated ? (
+        calibrating ? (
+          /* Active Calibration Terminal & Diagnostic Sequence */
+          <div className="bg-[#0B132B] border border-[#1C2541] rounded-lg p-8 shadow-2xl text-white space-y-6 select-none font-mono">
+            {/* Header / Status Banner */}
+            <div className="flex flex-wrap items-center justify-between border-b border-[#1C2541] pb-4 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-[#E67E22]/20 border border-[#E67E22]/40 text-[#E67E22]">
+                  <Activity className="w-5 h-5 animate-pulse" />
+                  <span className="absolute inset-0 rounded-full border-2 border-[#E67E22] animate-ping opacity-30" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white tracking-wide flex items-center gap-2">
+                    CALIBRATING PATIENT TELEMETRY NODE
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-[#E67E22]/20 text-[#E67E22] border border-[#E67E22]/40 font-mono">
+                      STAGE: {progress < 25 ? "1/5" : progress < 50 ? "2/5" : progress < 75 ? "3/5" : progress < 100 ? "4/5" : "5/5"}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-gray-400">
+                    Patient: <span className="text-white font-semibold">{patient?.name || patientId}</span> ({patientId}) • Target Config: <code className="text-[#39FF14]">data/telemetry_{patientId}.json</code>
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-black text-[#E67E22] font-sans tracking-tight">
+                  {progress}%
+                </div>
+                <div className="text-[11px] text-gray-400">Calibration Progress</div>
+              </div>
+            </div>
+
+            {/* Glowing Multi-Stage Progress Bar */}
+            <div className="space-y-2">
+              <div className="w-full bg-[#1C2541] rounded-full h-3 p-0.5 overflow-hidden shadow-inner">
+                <div
+                  className="bg-gradient-to-r from-[#E67E22] via-[#F39C12] to-[#2ECC71] h-2 rounded-full transition-all duration-300 shadow-[0_0_12px_rgba(230,126,34,0.6)]"
+                  style={{ width: `${Math.max(5, progress)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-400 font-sans">
+                <span>0% Hardware Bus Probe</span>
+                <span>25% Biosensors</span>
+                <span>50% Impedance Check</span>
+                <span>75% Configuration Compile</span>
+                <span>100% 50Hz Stream Online</span>
+              </div>
+            </div>
+
+            {/* Diagnostic Stages Checklist */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 text-xs">
+              <div className={`p-3 rounded border transition-all ${progress >= 20 ? "bg-[#1C2541]/60 border-[#2ECC71]/40 text-gray-200" : "bg-[#0E1726]/40 border-gray-800 text-gray-500"}`}>
+                <div className="flex items-center gap-2">
+                  {progress >= 20 ? <CheckCircle2 className="w-4 h-4 text-[#2ECC71] flex-shrink-0" /> : <Loader2 className="w-4 h-4 text-[#E67E22] animate-spin flex-shrink-0" />}
+                  <div>
+                    <div className="font-semibold text-white">1. Telemetry Node MAC Link</div>
+                    <div className="text-[11px] text-gray-400">Binding transceiver for ICU Bedside telemetry bus</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`p-3 rounded border transition-all ${progress >= 40 ? "bg-[#1C2541]/60 border-[#2ECC71]/40 text-gray-200" : progress >= 20 ? "bg-[#1C2541]/30 border-[#E67E22]/40 text-gray-300" : "bg-[#0E1726]/40 border-gray-800 text-gray-500"}`}>
+                <div className="flex items-center gap-2">
+                  {progress >= 40 ? <CheckCircle2 className="w-4 h-4 text-[#2ECC71] flex-shrink-0" /> : progress >= 20 ? <Loader2 className="w-4 h-4 text-[#E67E22] animate-spin flex-shrink-0" /> : <div className="w-4 h-4 rounded-full border border-gray-700 flex-shrink-0" />}
+                  <div>
+                    <div className="font-semibold text-white">2. Biosensor Lead Impedance</div>
+                    <div className="text-[11px] text-gray-400">Calibrating Lead II (500Ω) & pulse oximeter optical gain</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`p-3 rounded border transition-all ${progress >= 60 ? "bg-[#1C2541]/60 border-[#2ECC71]/40 text-gray-200" : progress >= 40 ? "bg-[#1C2541]/30 border-[#E67E22]/40 text-gray-300" : "bg-[#0E1726]/40 border-gray-800 text-gray-500"}`}>
+                <div className="flex items-center gap-2">
+                  {progress >= 60 ? <CheckCircle2 className="w-4 h-4 text-[#2ECC71] flex-shrink-0" /> : progress >= 40 ? <Loader2 className="w-4 h-4 text-[#E67E22] animate-spin flex-shrink-0" /> : <div className="w-4 h-4 rounded-full border border-gray-700 flex-shrink-0" />}
+                  <div>
+                    <div className="font-semibold text-white">3. Generate Configuration File</div>
+                    <div className="text-[11px] text-gray-400">Writing baseline vitals to <code>data/telemetry_{patientId}.json</code></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`p-3 rounded border transition-all ${progress >= 80 ? "bg-[#1C2541]/60 border-[#2ECC71]/40 text-gray-200" : progress >= 60 ? "bg-[#1C2541]/30 border-[#E67E22]/40 text-gray-300" : "bg-[#0E1726]/40 border-gray-800 text-gray-500"}`}>
+                <div className="flex items-center gap-2">
+                  {progress >= 80 ? <CheckCircle2 className="w-4 h-4 text-[#2ECC71] flex-shrink-0" /> : progress >= 60 ? <Loader2 className="w-4 h-4 text-[#E67E22] animate-spin flex-shrink-0" /> : <div className="w-4 h-4 rounded-full border border-gray-700 flex-shrink-0" />}
+                  <div>
+                    <div className="font-semibold text-white">4. Dual-Waveform 50Hz Stream</div>
+                    <div className="text-[11px] text-gray-400">Synchronizing PQRST complexes & photoplethysmography</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Status bar */}
+            <div className="flex items-center justify-between text-xs text-gray-400 border-t border-[#1C2541] pt-3">
+              <span className="flex items-center gap-1.5 text-gray-300">
+                <span className="w-2 h-2 rounded-full bg-[#E67E22] animate-ping" />
+                Live Telemetry Daemon Active • Initializing socket stream...
+              </span>
+              <span className="text-[11px] text-gray-400">Protocol: WS-TLS 50-FPS Realtime</span>
+            </div>
+          </div>
+        ) : (
+          /* Standby Screen: Waiting for Device Connection with Direct Action Button */
+          <div className="bg-white border border-[#CBD5E0] rounded-lg p-10 text-center shadow-sm space-y-6">
+            <div className="relative inline-flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-[#FFF5EB] border border-[#FBD38D] flex items-center justify-center shadow-sm">
+                <Radio className="w-10 h-10 text-[#E67E22] animate-pulse" />
+              </div>
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#E67E22] animate-ping" />
+            </div>
+
+            <div className="space-y-2 max-w-lg mx-auto">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF5EB] border border-[#FBD38D] text-[#C05621] text-xs font-semibold">
+                <AlertCircle className="w-3.5 h-3.5" /> Telemetry Standby — Calibration Required
+              </div>
+              <h2 className="text-xl font-bold text-[#1A202C]">Waiting for Device Connection</h2>
+              <p className="text-xs text-[#4A5568] leading-relaxed">
+                This patient's physiological telemetry has not been calibrated yet. Please click the button below to generate the personal telemetry configuration file and establish the live continuous 50Hz streaming link.
+              </p>
+            </div>
+
+            {/* Target telemetry details chip */}
+            <div className="bg-[#F7FAFC] border border-[#E2E8F0] rounded-md p-3 max-w-md mx-auto flex items-center justify-between text-xs text-[#4A5568]">
+              <div className="text-left">
+                <div className="text-[11px] text-gray-400 uppercase tracking-wide font-semibold">Telemetry Config Target</div>
+                <div className="font-mono font-bold text-[#002855]">data/telemetry_{patientId}.json</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] text-gray-400 uppercase tracking-wide font-semibold">Bed Location</div>
+                <div className="font-semibold text-[#002855]">Ward {patient?.ward_number || "ICU-A"} / {patient?.bed_number || "Bed-01"}</div>
+              </div>
+            </div>
+
+            {/* Prominent Direct Action Button */}
+            <div className="pt-2">
+              <button
+                onClick={handleCalibrate}
+                className="inline-flex items-center gap-2.5 px-6 py-3 bg-[#E67E22] hover:bg-[#D35400] text-white font-bold text-xs rounded-md shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 tracking-wider uppercase"
+              >
+                <Play className="w-4 h-4 fill-current" /> Calibrate Medical Device & Establish Live Stream
+              </button>
+            </div>
+          </div>
+        )
       ) : (
         <div className="bg-[#000000] p-6 rounded-lg font-mono border border-gray-800 text-white min-h-[500px] flex flex-col justify-between shadow-2xl select-none">
+          {/* Active Telemetry Source & Streaming Channel Banner */}
+          <div className="flex flex-wrap items-center justify-between pb-3 mb-2 border-b border-gray-900 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0A2540] border border-[#1A365D] text-[#39FF14] text-[11px] font-mono shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-[#39FF14] animate-ping" />
+                SIMULATOR FILE: data/telemetry_{patientId}.json
+              </span>
+              <span className="text-gray-400 text-[11px]">● Continuous 50Hz Dual-Waveform Streaming</span>
+            </div>
+            <div className="text-gray-400 text-[11px] font-mono">
+              Status: <span className="text-[#39FF14] font-bold">ONLINE & STREAMING</span>
+            </div>
+          </div>
+
           {/* Top Section: ECG Lead II (Lime Green - Exact Match) */}
           <div className="flex items-center justify-between relative h-[180px] border-b border-gray-900 pb-2">
             <div className="absolute top-1 left-1 text-xs text-gray-400 font-bold z-10">

@@ -7,7 +7,7 @@ import random
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database import Base, engine, SessionLocal
-from backend.models import User, Patient, Device, MLModelRecord, Setting, AuditLog
+from backend.models import User, Patient, Device, MLModelRecord, Setting, AuditLog, Alert
 from backend.auth import get_password_hash
 
 # Import routers
@@ -33,11 +33,11 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# CORS configuration for Next.js frontend
+# CORS configuration for Web and Mobile clients
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -193,6 +193,19 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
     try:
         while True:
             p_dev = global_simulator_service.simulator.get_or_create_patient(patient_id)
+            
+            # Fetch real-time attack state
+            attack_mode, target_patient = global_simulator_service.get_attack_state()
+            dev_attack = getattr(p_dev, "attack_mode", "Normal")
+            
+            effective_attack = attack_mode if (attack_mode != "Normal" and (target_patient == patient_id or not target_patient)) else (dev_attack if dev_attack != "Normal" else "Normal")
+            is_under_attack = effective_attack != "Normal"
+
+            attack_info = {}
+            if is_under_attack:
+                attack_info = global_simulator_service.get_attack_details(effective_attack, patient_id)
+            elif attack_mode != "Normal":
+                attack_info = global_simulator_service.get_attack_details(attack_mode, target_patient)
                 
             hr = getattr(p_dev, "heart_rate", 75.0)
             spo2 = getattr(p_dev, "spo2", 98.0)
@@ -209,6 +222,8 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
             pleth_val = generate_spo2_pleth_point(t_ms, int(hr))
             
             payload = {
+                "patient_id": patient_id,
+                "telemetry_file": f"data/telemetry_{patient_id}.json",
                 "ecg_voltage": round(ecg_val, 3),
                 "spo2_pleth": round(pleth_val, 3),
                 "heart_rate": int(round(hr)),
@@ -217,15 +232,31 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
                 "temperature": temp,
                 "respiration_rate": max(8, min(40, resp)),
                 "infusion_level": round(infusion, 1),
-                "pacing_rate": int(p_dev.pacing_rate),
+                "pacing_rate": int(getattr(p_dev, "pacing_rate", 70)),
                 "battery": int(battery),
                 "status": status,
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "is_under_attack": is_under_attack,
+                "attack_type": attack_info.get("attack_label", effective_attack),
+                "active_attack_mode": effective_attack,
+                "active_target_patient": target_patient,
+                "system_under_attack": attack_mode != "Normal",
+                # Rich Machine & Patient Attack Attribution
+                "machine_id": attack_info.get("target_device_id", f"icu_monitor_{patient_id}"),
+                "machine_name": attack_info.get("target_device_name", f"ECG Monitor - Patient {patient_id}"),
+                "machine_type": attack_info.get("target_device_type", "Medical Device"),
+                "patient_name": attack_info.get("target_patient_name", f"Patient {patient_id}"),
+                "ward_number": attack_info.get("ward_number", "ICU-A"),
+                "bed_number": attack_info.get("bed_number", "Bed-01"),
+                "attack_severity": attack_info.get("severity", "Normal"),
+                "attack_message": attack_info.get("alert_message", ""),
+                "action_taken": attack_info.get("action_taken", "")
             }
             
             await websocket.send_json(payload)
             t_ms += 20
             await asyncio.sleep(0.02)
+
             
     except WebSocketDisconnect:
         pass

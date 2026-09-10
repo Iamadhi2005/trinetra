@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api";
-import { UserPlus, Trash2, Phone, Shield, User as UserIcon, Link2, AlertCircle } from "lucide-react";
+import { UserPlus, Trash2, Phone, Shield, User as UserIcon, Link2, AlertCircle, Play } from "lucide-react";
 import Link from "next/link";
 
 interface Patient {
@@ -20,9 +20,16 @@ interface Patient {
   ward_number: string;
   bed_number: string;
   doctor_assigned: string;
+  admission_date?: string;
   is_calibrated: boolean;
   calibration_progress: number;
 }
+
+const getLocalDateTimeString = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
 
 export default function PatientsPage() {
   const queryClient = useQueryClient();
@@ -39,7 +46,10 @@ export default function PatientsPage() {
   const [wardNumber, setWardNumber] = useState("ICU-A");
   const [bedNumber, setBedNumber] = useState("Bed-01");
   const [doctorAssigned, setDoctorAssigned] = useState("Dr. Radhi");
-  const [devices, setDevices] = useState("ECG Monitor, Pulse Oximeter");
+  const [admissionDate, setAdmissionDate] = useState(getLocalDateTimeString);
+  const [baseHeartRate, setBaseHeartRate] = useState<number>(75);
+  const [baseSpo2, setBaseSpo2] = useState<number>(98.5);
+  const [devices, setDevices] = useState("ICU Monitor, ECG Monitor, Pulse Oximeter, Infusion Pump");
   const [photo, setPhoto] = useState<File | null>(null);
 
   const [mounted, setMounted] = useState(false);
@@ -82,6 +92,9 @@ export default function PatientsPage() {
     formData.append("ward_number", wardNumber);
     formData.append("bed_number", bedNumber);
     formData.append("doctor_assigned", doctorAssigned);
+    formData.append("admission_date", admissionDate);
+    formData.append("base_heart_rate", baseHeartRate.toString());
+    formData.append("base_spo2", baseSpo2.toString());
     formData.append("devices", devices);
     if (photo) {
       formData.append("photo", photo);
@@ -101,6 +114,9 @@ export default function PatientsPage() {
       setPhone("");
       setGuardianName("");
       setGuardianPhone("");
+      setAdmissionDate(getLocalDateTimeString());
+      setBaseHeartRate(75);
+      setBaseSpo2(98.5);
       setPhoto(null);
     } catch (err: any) {
       alert(err.message || "Failed to register patient");
@@ -296,6 +312,49 @@ export default function PatientsPage() {
                 className="w-full text-xs py-1 text-gray-500"
               />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#4A5568] mb-1 flex items-center justify-between">
+                <span>Admission Date & Time</span>
+                <span className="text-[10px] text-[#3182CE]">ISO UTC/Local</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={admissionDate}
+                onChange={(e) => setAdmissionDate(e.target.value)}
+                className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#4A5568] mb-1 flex items-center justify-between">
+                <span>Baseline Heart Rate</span>
+                <span className="text-[10px] text-[#718096]">Simulator Target (BPM)</span>
+              </label>
+              <input
+                type="number"
+                min="40"
+                max="190"
+                value={baseHeartRate}
+                onChange={(e) => setBaseHeartRate(Number(e.target.value))}
+                className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
+                placeholder="75"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#4A5568] mb-1 flex items-center justify-between">
+                <span>Baseline SpO2 (%)</span>
+                <span className="text-[10px] text-[#718096]">Simulator Target (%)</span>
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="70"
+                max="100"
+                value={baseSpo2}
+                onChange={(e) => setBaseSpo2(Number(e.target.value))}
+                className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
+                placeholder="98.5"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end">
@@ -373,9 +432,30 @@ export default function PatientsPage() {
                   <b>{patient.doctor_assigned}</b>
                 </div>
                 <div className="flex justify-between">
+                  <span>Admission Date:</span>
+                  <b className="text-[#0F172A]">
+                    {patient.admission_date
+                      ? new Date(patient.admission_date).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Recently Admitted"}
+                  </b>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Continuous Telemetry:</span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono bg-[#E6FFFA] text-[#234E52] border border-[#B2F5EA]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#319795] animate-ping" />
+                    telemetry_{patient.id}.json
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span>Telemetry State:</span>
                   {patient.is_calibrated ? (
-                    <span className="text-[#2ECC71] font-semibold">● CALIBRATED</span>
+                    <span className="text-[#2ECC71] font-semibold">● CALIBRATED & LIVE</span>
                   ) : (
                     <span className="text-[#E67E22] font-semibold flex items-center gap-1">
                       <AlertCircle className="w-3 h-3" /> UNCALIBRATED
@@ -384,7 +464,15 @@ export default function PatientsPage() {
                 </div>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-1.5">
+                {!patient.is_calibrated && (
+                  <Link
+                    href={`/patients/${patient.id}`}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 bg-[#E67E22] hover:bg-[#D35400] text-white text-xs font-semibold rounded shadow-sm transition-colors uppercase tracking-wider"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" /> Calibrate Medical Device
+                  </Link>
+                )}
                 <Link
                   href={`/patients/${patient.id}`}
                   className="w-full block text-center py-2 bg-[#EBF3FA] hover:bg-[#D4E6F1] text-[#002855] text-xs font-semibold rounded transition-colors"

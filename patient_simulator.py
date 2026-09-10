@@ -126,6 +126,42 @@ class DeviceSimulator:
                 "sys": self.systolic_bp, "dia": self.diastolic_bp, "temp": self.temperature, "resp": self.respiration_rate
             })
 
+        # Continuously persist latest live generated vitals to patient-specific telemetry file
+        telemetry_file = f"data/telemetry_{self.patient_id}.json"
+        try:
+            import json
+            existing_data = {}
+            if os.path.exists(telemetry_file):
+                try:
+                    with open(telemetry_file, "r") as f:
+                        existing_data = json.load(f)
+                except Exception:
+                    existing_data = {}
+
+            existing_data.update({
+                "patient_id": self.patient_id,
+                "last_updated": time.time(),
+                "status": "Online" if self.status != "Offline" else "Offline",
+                "attack_mode": self.attack_mode,
+                "heart_rate": round(self.heart_rate, 1),
+                "spo2": round(self.spo2, 1),
+                "blood_pressure": f"{int(self.systolic_bp)}/{int(self.diastolic_bp)}",
+                "systolic_bp": round(self.systolic_bp, 1),
+                "diastolic_bp": round(self.diastolic_bp, 1),
+                "respiration_rate": round(self.respiration_rate, 1),
+                "temperature": round(self.temperature, 1),
+                "infusion_rate": round(self.infusion_rate, 1),
+                "battery": round(self.battery, 1),
+                "pump_status": self.pump_status,
+                "lead_impedance": round(self.lead_impedance, 1),
+                "pacing_rate": round(self.pacing_rate, 1)
+            })
+            os.makedirs("data", exist_ok=True)
+            with open(telemetry_file, "w") as f:
+                json.dump(existing_data, f, indent=2)
+        except Exception:
+            pass
+
 class PatientSimulator:
     """Manages multiple patient devices simultaneously in the hospital room."""
     def __init__(self):
@@ -162,6 +198,10 @@ class PatientSimulator:
                 all_patient_ids.add(row['patient_id'])
         except Exception:
             pass
+
+        # 3. Retain active simulators already instantiated
+        for p_id in list(self.patients.keys()):
+            all_patient_ids.add(p_id)
 
         # Update simulator objects
         new_patients = {}
