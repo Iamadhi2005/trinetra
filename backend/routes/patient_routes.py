@@ -281,13 +281,18 @@ def create_patient(
     if not any("icu" in d.lower() for d in dev_types):
         dev_types.insert(0, "ICU Monitor")
 
-    for d_type in dev_types:
+    import hashlib
+    for idx, d_type in enumerate(dev_types):
         dev_id = f"{d_type.lower().replace(' ', '_')}_{patient_id}"
+        h = hashlib.md5(dev_id.encode()).hexdigest()
+        ip_last = 100 + (abs(hash(patient_id) + idx) % 150)
         new_dev = Device(
             id=dev_id,
             name=f"{d_type} - {name}",
             type=d_type,
             patient_id=patient_id,
+            ip_address=f"192.168.1.{ip_last}",
+            mac_address=f"00:1B:44:{h[0:2].upper()}:{h[2:4].upper()}:{h[4:6].upper()}",
             status="Online"
         )
         db.add(new_dev)
@@ -333,15 +338,16 @@ def get_patient_by_id(patient_id: str, db: Session = Depends(get_db)):
     return patient
 
 @router.delete("/{patient_id}")
-def delete_patient(patient_id: str, db: Session = Depends(get_db), current_user = Depends(require_role(["Admin", "Doctor"]))):
+def delete_patient(patient_id: str, db: Session = Depends(get_db), current_user = Depends(require_role(["Admin", "Doctor", "Nurse"]))):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
+    if patient:
+        db.delete(patient)
         
-    db.delete(patient)
+    # Delete any associated devices
+    db.query(Device).filter(Device.patient_id == patient_id).delete()
     
     audit = AuditLog(
-        username=current_user.username,
+        username=getattr(current_user, "username", "Admin"),
         action="PATIENT_DELETE",
         target=patient_id,
         severity="Warning",
@@ -358,7 +364,16 @@ def delete_patient(patient_id: str, db: Session = Depends(get_db), current_user 
         except Exception:
             pass
 
-    global_simulator_service.simulator.reload_patients()
+    # Cleanly remove from in-memory simulator
+    try:
+        if hasattr(global_simulator_service.simulator, "remove_patient"):
+            global_simulator_service.simulator.remove_patient(patient_id)
+        elif patient_id in global_simulator_service.simulator.patients:
+            del global_simulator_service.simulator.patients[patient_id]
+        global_simulator_service.simulator.reload_patients()
+    except Exception:
+        pass
+
     return {"message": f"Patient {patient_id} deleted successfully"}
 
 @router.post("/{patient_id}/calibrate")

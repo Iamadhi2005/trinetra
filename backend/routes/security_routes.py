@@ -79,6 +79,16 @@ def trigger_attack(
         "details": attack_details
     }
 
+@router.post("/disengage")
+def disengage_all_attacks():
+    state_data = global_simulator_service.trigger_attack_now("Normal", "")
+    attack_details = global_simulator_service.get_attack_details("Normal", "")
+    return {
+        "message": "All attacks disengaged and neutralized. Telemetry restored to normal baseline.",
+        "state": state_data,
+        "details": attack_details
+    }
+
 # ==========================================
 # Pure ML Mode & Adversarial Testbed Routes
 # ==========================================

@@ -40,9 +40,9 @@ export default function PatientsPage() {
   const [age, setAge] = useState(45);
   const [gender, setGender] = useState("Male");
   const [bloodGroup, setBloodGroup] = useState("O+");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState("+91 ");
   const [guardianName, setGuardianName] = useState("");
-  const [guardianPhone, setGuardianPhone] = useState("");
+  const [guardianPhone, setGuardianPhone] = useState("+91 ");
   const [wardNumber, setWardNumber] = useState("ICU-A");
   const [bedNumber, setBedNumber] = useState("Bed-01");
   const [doctorAssigned, setDoctorAssigned] = useState("Dr. Radhi");
@@ -51,6 +51,19 @@ export default function PatientsPage() {
   const [baseSpo2, setBaseSpo2] = useState<number>(98.5);
   const [devices, setDevices] = useState("ICU Monitor, ECG Monitor, Pulse Oximeter, Infusion Pump");
   const [photo, setPhoto] = useState<File | null>(null);
+
+  const handlePhoneChange = (val: string, setter: (v: string) => void) => {
+    if (!val || val.trim() === "") {
+      setter("+91 ");
+      return;
+    }
+    if (!val.startsWith("+91")) {
+      const digits = val.replace(/^\+?9?1?\s*/, "");
+      setter("+91 " + digits);
+    } else {
+      setter(val);
+    }
+  };
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -111,9 +124,9 @@ export default function PatientsPage() {
       setShowAddForm(false);
       // Reset
       setName("");
-      setPhone("");
+      setPhone("+91 ");
       setGuardianName("");
-      setGuardianPhone("");
+      setGuardianPhone("+91 ");
       setAdmissionDate(getLocalDateTimeString());
       setBaseHeartRate(75);
       setBaseSpo2(98.5);
@@ -161,7 +174,7 @@ export default function PatientsPage() {
               <input
                 type="text"
                 required
-                placeholder="e.g. John Doe"
+                placeholder=""
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
@@ -217,9 +230,9 @@ export default function PatientsPage() {
               </label>
               <input
                 type="text"
-                placeholder="+1-555-0101"
+                placeholder="+91 "
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => handlePhoneChange(e.target.value, setPhone)}
                 className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
               />
             </div>
@@ -283,7 +296,7 @@ export default function PatientsPage() {
               </label>
               <input
                 type="text"
-                placeholder="Jane Doe (Spouse)"
+                placeholder=""
                 value={guardianName}
                 onChange={(e) => setGuardianName(e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
@@ -295,9 +308,9 @@ export default function PatientsPage() {
               </label>
               <input
                 type="text"
-                placeholder="+1-555-0102"
+                placeholder="+91 "
                 value={guardianPhone}
-                onChange={(e) => setGuardianPhone(e.target.value)}
+                onChange={(e) => handlePhoneChange(e.target.value, setGuardianPhone)}
                 className="w-full text-xs px-3 py-2 border border-[#CBD5E0] rounded bg-white text-[#1A202C]"
               />
             </div>
@@ -431,6 +444,14 @@ export default function PatientsPage() {
                   <span>Assigned Doctor:</span>
                   <b>{patient.doctor_assigned}</b>
                 </div>
+                {patient.phone && (
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-[#718096]" /> Phone:
+                    </span>
+                    <b className="text-[#0F172A] font-mono">{patient.phone}</b>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Admission Date:</span>
                   <b className="text-[#0F172A]">

@@ -6,13 +6,8 @@ import { fetchApi } from "@/lib/api";
 import {
   Activity,
   Users,
-  AlertTriangle,
-  ShieldCheck,
   ShieldAlert,
-  Heart,
-  Droplet,
   Zap,
-  Wifi,
   Cpu,
   Monitor,
   HeartPulse,
@@ -22,6 +17,7 @@ import {
   ExternalLink,
   CheckCircle2,
   X,
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 
@@ -70,6 +66,7 @@ interface DashboardData {
 interface Patient {
   id: string;
   name: string;
+  phone?: string;
   status: string;
   ward_number: string;
   bed_number: string;
@@ -98,27 +95,6 @@ interface LiveVitalSummary {
   action_taken?: string;
 }
 
-function MiniEcgStrip({ hr, isCritical }: { hr: number; isCritical?: boolean }) {
-  return (
-    <div className="w-full h-7 bg-black/90 rounded border border-gray-900 px-2 flex items-center justify-between overflow-hidden relative my-1">
-      <span className="text-[8px] text-[#39FF14] font-bold font-mono tracking-wider absolute left-1.5 top-0.5 z-10 opacity-80">
-        ECG LEAD II
-      </span>
-      <svg className="w-full h-5 mt-1.5" viewBox="0 0 200 24" preserveAspectRatio="none">
-        <path
-          d="M 0 12 L 15 12 L 20 10 L 24 14 L 28 12 L 40 12 L 44 14 L 48 2 L 52 22 L 56 9 L 60 13 L 64 12 L 76 12 L 84 10 L 92 12 L 104 12 L 108 10 L 112 14 L 116 12 L 128 12 L 132 14 L 136 2 L 140 22 L 144 9 L 148 13 L 152 12 L 164 12 L 172 10 L 180 12 L 200 12"
-          fill="none"
-          stroke={isCritical ? "#EF4444" : "#39FF14"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="animate-pulse"
-        />
-      </svg>
-    </div>
-  );
-}
-
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [liveVitals, setLiveVitals] = useState<Record<string, LiveVitalSummary>>({});
@@ -145,7 +121,7 @@ export default function DashboardPage() {
     enabled: mounted,
   });
 
-  // Maintain active WebSockets for all calibrated patients to render central ICU telemetry panel
+  // Maintain active WebSockets for all calibrated patients to render live telemetry data
   useEffect(() => {
     if (!mounted || patients.length === 0) return;
 
@@ -220,8 +196,29 @@ export default function DashboardPage() {
         method: "POST",
         body: JSON.stringify({ attack_mode: "Normal", target_patient: "" }),
       });
-      setActionMessage("Attack disengaged. System restored to baseline.");
+      // Immediately reset local live attack vitals so banner and warning overlays clear instantly
+      setLiveVitals((prev) => {
+        const next = { ...prev };
+        Object.keys(next).forEach((k) => {
+          if (next[k]) {
+            next[k] = {
+              ...next[k],
+              is_under_attack: false,
+              active_attack_mode: "Normal",
+              attack_type: "Normal Telemetry",
+              attack_severity: "Normal",
+              attack_message: "",
+              action_taken: "None",
+            };
+          }
+        });
+        return next;
+      });
+      setActionMessage("Threat neutralized. All clinical telemetry restored to baseline.");
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["patients"] });
+      queryClient.invalidateQueries({ queryKey: ["quarantine"] });
+      queryClient.invalidateQueries({ queryKey: ["security-events"] });
       setTimeout(() => setActionMessage(null), 4000);
     } catch (err: any) {
       setActionMessage(`Neutralization failed: ${err.message}`);
@@ -252,7 +249,7 @@ export default function DashboardPage() {
   const alertMessage =
     liveAttackVital?.attack_message ||
     metricsAttack?.alert_message ||
-    `🚨 [${attackSeverity.toUpperCase()} ALERT] ${attackLabel} detected on Machine: '${machineName}' (${machineId}) | Target Patient: '${patientName}' (${patientId}, Ward: ${wardNumber}, Bed: ${bedNumber}). Action: ${actionTaken}.`;
+    `[${attackSeverity.toUpperCase()} ALERT] ${attackLabel} detected on Machine: '${machineName}' (${machineId}) | Target Patient: '${patientName}' (${patientId}, Ward: ${wardNumber}, Bed: ${bedNumber}). Action: ${actionTaken}.`;
 
   const attackKey = `${attackMode}_${patientId}_${machineId}`;
   const isBannerDismissed = dismissedKey === attackKey;
@@ -267,29 +264,32 @@ export default function DashboardPage() {
       {/* Action Notification Toast */}
       {actionMessage && (
         <div className="bg-[#1E293B] border border-[#38BDF8] text-[#38BDF8] px-4 py-2 rounded text-xs font-semibold flex items-center justify-between shadow-lg">
-          <span>{actionMessage}</span>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-[#38BDF8]" />
+            <span>{actionMessage}</span>
+          </div>
           <button onClick={() => setActionMessage(null)} className="text-gray-400 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* SUDDEN EMERGENCY ATTACK ALERT BANNER */}
+      {/* EMERGENCY ATTACK ALERT BANNER (No emojis) */}
       {isUnderAttack && !isBannerDismissed && (
         <div className="relative overflow-hidden bg-gradient-to-r from-red-950 via-[#78281F] to-red-950 border-2 border-red-500 rounded-xl p-5 shadow-[0_0_30px_rgba(239,68,68,0.4)] transition-all animate-pulse">
           {/* Top Alert Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-red-500/30">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-red-600/30 border border-red-500 text-red-300">
-                <AlertOctagon className="w-7 h-7 animate-bounce" />
+                <AlertOctagon className="w-6 h-6 animate-pulse" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-black tracking-wider text-white uppercase">
-                    🚨 INTRUSION ALERT: ACTIVE CYBERATTACK DETECTED
+                  <h2 className="text-base sm:text-lg font-bold tracking-wider text-white uppercase">
+                    INTRUSION ALERT: ACTIVE THREAT DETECTED
                   </h2>
-                  <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-red-600 text-white uppercase tracking-widest animate-ping">
-                    LIVE
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-600 text-white uppercase tracking-wider">
+                    ACTIVE
                   </span>
                 </div>
                 <p className="text-xs text-red-200 mt-0.5">
@@ -312,45 +312,41 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 4 Core Attribution Metric Cards: Attack Type, Machine, Patient, Mitigation */}
+          {/* 4 Attribution Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 my-4">
-            {/* 1. Attack Vector */}
             <div className="bg-[#110505]/80 border border-red-500/40 rounded-lg p-3">
-              <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest flex items-center gap-1.5">
+              <div className="text-[10px] font-bold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
                 <ShieldAlert className="w-3.5 h-3.5" /> Attack Vector
               </div>
-              <div className="text-sm font-black text-white mt-1 leading-tight">{attackLabel}</div>
+              <div className="text-sm font-bold text-white mt-1 leading-tight">{attackLabel}</div>
               <div className="text-[10px] text-red-300 mt-1 font-mono">Mode: {attackMode}</div>
             </div>
 
-            {/* 2. Compromised Machine */}
             <div className="bg-[#110505]/80 border border-amber-500/40 rounded-lg p-3">
-              <div className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+              <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Cpu className="w-3.5 h-3.5" /> Compromised Machine
               </div>
-              <div className="text-sm font-black text-white mt-1 leading-tight">{machineName}</div>
+              <div className="text-sm font-bold text-white mt-1 leading-tight">{machineName}</div>
               <div className="text-[10px] text-amber-300 mt-1 font-mono">
                 ID: <code>{machineId}</code> ({machineType})
               </div>
             </div>
 
-            {/* 3. Target Patient */}
             <div className="bg-[#110505]/80 border border-blue-500/40 rounded-lg p-3">
-              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Users className="w-3.5 h-3.5" /> Target Patient
               </div>
-              <div className="text-sm font-black text-white mt-1 leading-tight">{patientName}</div>
+              <div className="text-sm font-bold text-white mt-1 leading-tight">{patientName}</div>
               <div className="text-[10px] text-blue-300 mt-1 font-mono">
                 ID: <code>{patientId}</code> | {wardNumber}-{bedNumber}
               </div>
             </div>
 
-            {/* 4. Defense Action */}
             <div className="bg-[#110505]/80 border border-emerald-500/40 rounded-lg p-3">
-              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+              <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5" /> Automated IPS Action
               </div>
-              <div className="text-sm font-black text-white mt-1 leading-tight">{actionTaken}</div>
+              <div className="text-sm font-bold text-white mt-1 leading-tight">{actionTaken}</div>
               <div className="text-[10px] text-emerald-300 mt-1">Rule Triggered & Enforced</div>
             </div>
           </div>
@@ -361,10 +357,10 @@ export default function DashboardPage() {
             <span>{alertMessage}</span>
           </div>
 
-          {/* Direct Incident Mitigation Action Controls */}
+          {/* Action Controls */}
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-3 border-t border-red-500/30">
             <div className="text-xs text-red-200 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
               <span>Immediate Response Actions Available</span>
             </div>
 
@@ -404,7 +400,7 @@ export default function DashboardPage() {
       >
         <div>
           <h1 className="text-base font-bold uppercase tracking-wider flex items-center gap-2">
-            <Monitor className="w-5 h-5 text-[#3498DB] animate-pulse" /> ICU Central Monitoring Station
+            <Monitor className="w-5 h-5 text-[#3498DB]" /> ICU Central Monitoring Station
           </h1>
           <p className="text-[11px] text-[#A0AEC0] uppercase tracking-widest mt-0.5">
             Real-time Clinical Telemetry Gate & Network Integrity Guard
@@ -412,10 +408,10 @@ export default function DashboardPage() {
         </div>
 
         {isUnderAttack ? (
-          <div className="flex items-center gap-2 text-xs font-bold bg-red-900/90 text-white px-3 py-1.5 rounded border border-red-400 animate-pulse">
+          <div className="flex items-center gap-2 text-xs font-bold bg-red-900/90 text-white px-3 py-1.5 rounded border border-red-400">
             <AlertOctagon className="w-4 h-4 text-red-300" />
             <span>
-              🚨 ATTACK ACTIVE: {attackLabel} ON {machineName} ({patientName})
+              THREAT ISOLATED: {attackLabel} ON {machineName} ({patientName})
             </span>
           </div>
         ) : (
@@ -425,43 +421,55 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Clinical KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-        {/* Total Admitted */}
+      {/* Metric Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        {/* Total Patients */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">Total Patients</div>
-          <div className="text-xl font-bold text-[#0F172A] mt-1">{isMetricsLoading ? "--" : metrics?.patients_count}</div>
-          <div className="text-[10px] text-[#718096] mt-1">Admitted Registry</div>
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider flex items-center gap-1.5">
+            <Users className="w-3 h-3 text-[#002855]" /> Total Patients
+          </div>
+          <div className="text-xl font-bold text-[#002855] mt-1">
+            {isMetricsLoading ? "--" : (metrics?.patients_count ?? patients.length)}
+          </div>
+          <div className="text-[10px] text-[#3498DB] font-semibold mt-1">Admitted in Wards</div>
         </div>
 
-        {/* Connected Nodes */}
+        {/* Connected Devices */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">Connected Devices</div>
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider flex items-center gap-1.5">
+            <Cpu className="w-3 h-3 text-[#718096]" /> Connected Devices
+          </div>
           <div className="text-xl font-bold text-[#0F172A] mt-1">{isMetricsLoading ? "--" : metrics?.active_devices}</div>
           <div className="text-[10px] text-[#2ECC71] font-semibold mt-1">Online Telemetry</div>
         </div>
 
-        {/* Active Telemetry Sessions */}
+        {/* Active Sessions */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">Active Sessions</div>
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider flex items-center gap-1.5">
+            <Activity className="w-3 h-3 text-[#3498DB]" /> Active Sessions
+          </div>
           <div className="text-xl font-bold text-[#3498DB] mt-1">
-            {activeMonitoringCount} / {metrics?.patients_count || 0}
+            {activeMonitoringCount} / {metrics?.patients_count || patients.length || 0}
           </div>
           <div className="text-[10px] text-[#3498DB] font-semibold mt-1">WebSocket Feeds</div>
         </div>
 
-        {/* Critical Alerts */}
+        {/* Critical Vitals */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">Critical Vitals</div>
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider flex items-center gap-1.5">
+            <HeartPulse className="w-3 h-3 text-[#E74C3C]" /> Critical Vitals
+          </div>
           <div className={`text-xl font-bold mt-1 ${criticalPatientsCount > 0 ? "text-[#E74C3C]" : "text-[#2ECC71]"}`}>
             {criticalPatientsCount}
           </div>
           <div className="text-[10px] text-[#718096] mt-1">Vitals Out of Range</div>
         </div>
 
-        {/* Device Alerts */}
+        {/* Active Alerts */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">Active Alerts</div>
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider flex items-center gap-1.5">
+            <ShieldAlert className="w-3 h-3 text-[#E74C3C]" /> Active Alerts
+          </div>
           <div
             className={`text-xl font-bold mt-1 ${
               (metrics?.active_alerts_count || 0) > 0 ? "text-[#E74C3C]" : "text-[#2ECC71]"
@@ -469,26 +477,28 @@ export default function DashboardPage() {
           >
             {metrics?.active_alerts_count}
           </div>
-          <div className="text-[10px] text-[#718096] mt-1">Security / Device Warnings</div>
+          <div className="text-[10px] text-[#718096] mt-1">Security Warnings</div>
         </div>
 
-        {/* Cybersecurity status */}
+        {/* Cyber Threat Logs */}
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-sm">
-          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider">Cyber Threat Logs</div>
+          <div className="text-[10px] font-bold text-[#718096] uppercase tracking-wider flex items-center gap-1.5">
+            <Zap className="w-3 h-3 text-[#2ECC71]" /> Cyber Threat Logs
+          </div>
           <div className="text-xl font-bold text-[#0F172A] mt-1">{isMetricsLoading ? "--" : metrics?.attacks_today}</div>
           <div className="text-[10px] text-[#2ECC71] font-semibold mt-1">IPS Isolated Events</div>
         </div>
       </div>
 
-      {/* ICU Central Telemetry Grid Display */}
+      {/* Central Telemetry Grid Display (Without mini-ECG wave box, Without emojis) */}
       <div className="bg-[#0A0F1D] rounded-lg p-5 border border-[#00FF66]/20 shadow-md">
         <h2 className="text-[#00FF66] font-mono text-sm uppercase tracking-widest border-b border-[#00FF66]/20 pb-3 mb-4 flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <HeartPulse className="w-5 h-5 animate-pulse" /> Live Telemetry Feed Matrix
+            <HeartPulse className="w-5 h-5" /> Live Telemetry Feed Matrix
           </span>
           {isUnderAttack && (
-            <span className="text-xs text-red-400 bg-red-950/60 border border-red-500/50 px-2.5 py-0.5 rounded font-bold animate-pulse">
-              🚨 TARGET IDENTIFIED: {patientName} ({machineName})
+            <span className="text-xs text-red-400 bg-red-950/60 border border-red-500/50 px-2.5 py-0.5 rounded font-bold">
+              TARGET IDENTIFIED: {patientName} ({machineName})
             </span>
           )}
         </h2>
@@ -505,13 +515,12 @@ export default function DashboardPage() {
               const isPatientUnderAttack = targetPat ? targetPat === p.id : (!!live?.is_under_attack);
               const isCriticalVitals = live && (live.heart_rate > 100 || live.heart_rate < 55 || live.spo2 < 93);
 
-
               return (
                 <div
                   key={p.id}
-                  className={`border rounded-lg p-4 font-mono text-xs flex flex-col justify-between min-h-[170px] transition-all ${
+                  className={`border rounded-lg p-4 font-mono text-xs flex flex-col justify-between transition-all ${
                     isPatientUnderAttack
-                      ? "bg-red-950/40 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] ring-2 ring-red-500 animate-pulse"
+                      ? "bg-red-950/40 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.5)] ring-2 ring-red-500"
                       : isCriticalVitals
                       ? "bg-red-950/10 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.2)]"
                       : "bg-[#111827] border-[#00FF66]/20"
@@ -522,7 +531,7 @@ export default function DashboardPage() {
                       <div className="text-white font-bold text-sm tracking-wide flex items-center gap-1.5">
                         {p.name}
                         {isPatientUnderAttack && (
-                          <span className="text-[9px] bg-red-600 text-white font-bold px-1.5 py-0.5 rounded uppercase animate-ping">
+                          <span className="text-[9px] bg-red-600 text-white font-bold px-1.5 py-0.5 rounded uppercase">
                             ALERT
                           </span>
                         )}
@@ -533,11 +542,11 @@ export default function DashboardPage() {
                     </div>
 
                     {isPatientUnderAttack ? (
-                      <span className="text-red-400 bg-red-900/60 border border-red-500 px-2 py-0.5 rounded font-bold text-[10px] uppercase animate-pulse">
-                        🚨 UNDER ATTACK
+                      <span className="text-red-400 bg-red-900/60 border border-red-500 px-2 py-0.5 rounded font-bold text-[10px] uppercase">
+                        UNDER ATTACK
                       </span>
                     ) : p.is_calibrated ? (
-                      <span className="text-[#00FF66] font-bold animate-pulse text-[10px]">● STREAMING</span>
+                      <span className="text-[#00FF66] font-bold text-[10px]">● STREAMING</span>
                     ) : (
                       <span className="text-gray-500 font-bold text-[10px]">UNCALIBRATED</span>
                     )}
@@ -545,7 +554,7 @@ export default function DashboardPage() {
 
                   {/* Compromised Machine Callout when under attack */}
                   {isPatientUnderAttack && (
-                    <div className="my-1.5 bg-red-900/50 border border-red-500/50 rounded px-2 py-1 text-[10px] text-red-200">
+                    <div className="my-2 bg-red-900/50 border border-red-500/50 rounded px-2.5 py-1.5 text-[10px] text-red-200">
                       <div className="font-bold text-red-300">
                         Compromised: {live?.machine_name || machineName}
                       </div>
@@ -555,57 +564,54 @@ export default function DashboardPage() {
                     </div>
                   )}
 
+                  {/* Clean Vitals Readout Row (No Emojis, No Mini-ECG Strip Box) */}
                   {p.is_calibrated ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4 py-2 border-t border-b border-[#00FF66]/10 my-1.5">
-                        <div className="flex items-center gap-2">
-                          <Heart className="w-4 h-4 text-red-500 fill-current animate-pulse" />
-                          <div>
-                            <div className="text-[10px] text-gray-400">HR</div>
-                            <div
-                              className={`font-bold text-sm ${
-                                isPatientUnderAttack || isCriticalVitals ? "text-red-500" : "text-white"
-                              }`}
-                            >
-                              {live?.heart_rate || "--"} <span className="text-[9px]">bpm</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Droplet className="w-4 h-4 text-[#3498DB]" />
-                          <div>
-                            <div className="text-[10px] text-gray-400">SpO₂</div>
-                            <div
-                              className={`font-bold text-sm ${
-                                isPatientUnderAttack || isCriticalVitals ? "text-red-500" : "text-white"
-                              }`}
-                            >
-                              {live?.spo2 || "--"} <span className="text-[9px]">%</span>
-                            </div>
+                    <div className="grid grid-cols-2 gap-4 py-3 border-t border-b border-[#00FF66]/15 my-3">
+                      <div className="flex items-center gap-2">
+                        <HeartPulse className="w-4 h-4 text-emerald-400" />
+                        <div>
+                          <div className="text-[10px] text-gray-400 font-semibold">HR</div>
+                          <div
+                            className={`font-bold text-base ${
+                              isPatientUnderAttack || isCriticalVitals ? "text-red-400" : "text-white"
+                            }`}
+                          >
+                            {live?.heart_rate || "--"} <span className="text-[10px] font-normal text-gray-400">bpm</span>
                           </div>
                         </div>
                       </div>
-                      <MiniEcgStrip
-                        hr={live?.heart_rate || 75}
-                        isCritical={isPatientUnderAttack || isCriticalVitals}
-                      />
-                    </>
+
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-cyan-400" />
+                        <div>
+                          <div className="text-[10px] text-gray-400 font-semibold">SpO₂</div>
+                          <div
+                            className={`font-bold text-base ${
+                              isPatientUnderAttack || isCriticalVitals ? "text-red-400" : "text-white"
+                            }`}
+                          >
+                            {live?.spo2 || "--"} <span className="text-[10px] font-normal text-gray-400">%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="flex-grow flex items-center justify-center text-[10px] text-gray-500 uppercase tracking-wider py-4">
+                    <div className="py-5 text-center text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
                       Waiting for Device Connection
                     </div>
                   )}
 
-                  <div>
+                  {/* Clean Action Button */}
+                  <div className="pt-1">
                     <Link
                       href={`/patients/${p.id}`}
-                      className={`block text-center py-1.5 text-[10px] font-bold rounded transition-colors uppercase tracking-wider ${
+                      className={`block text-center py-2 text-[11px] font-bold rounded transition-colors uppercase tracking-wider ${
                         isPatientUnderAttack
                           ? "bg-red-600 hover:bg-red-700 text-white border border-red-400 shadow-sm"
                           : "bg-[#1F2937] hover:bg-[#374151] border border-[#00FF66]/30 text-[#00FF66]"
                       }`}
                     >
-                      {isPatientUnderAttack ? "🚨 Inspect Emergency Console" : "Inspect Console"}
+                      {isPatientUnderAttack ? "Inspect Emergency Console" : "Inspect Console"}
                     </Link>
                   </div>
                 </div>
@@ -615,7 +621,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* RECENT SECURITY WARNINGS & ALERTS STREAM */}
+      {/* Recent Security Warnings & Alerts Stream (No Emojis) */}
       {metrics?.recent_alerts && metrics.recent_alerts.length > 0 && (
         <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 shadow-sm space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
@@ -671,4 +677,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import time
 import json
 import os
@@ -138,17 +141,45 @@ class SimulatorService:
         db: Session = SessionLocal()
         try:
             if attack_mode == "Normal":
-                for p_id in self.simulator.patients:
-                    self.simulator.set_attack_mode(p_id, "Normal", ips_disabled=False)
+                # Clear all simulator patients to clinical baseline
+                self.simulator.reset_all_to_normal()
                 self.ids.quarantine_queue.clear()
                 self.ids.blocked_clients.clear()
+                self.ids.packet_timestamps.clear()
+                self.ids.last_pure_ml_diagnostics = {
+                    "l2_network": {
+                        "features": {"duration": 0.0, "rate": 5.0, "tot_size": 150, "avg_size": 150, "iat": 0.2},
+                        "rf_pred": 0,
+                        "rf_prob_attack": 0.0,
+                        "rf_prob_benign": 1.0,
+                        "is_anomaly": False
+                    },
+                    "l1_physiological": {
+                        "features": {"heart_rate": 75.0, "spo2": 98.0, "lead_impedance": 500.0, "infusion_rate": 5.0},
+                        "if_pred": 1,
+                        "if_anomaly_score": 0.20,
+                        "is_anomaly": False
+                    },
+                    "system_mode": "pure_ml",
+                    "last_decision": "Normal",
+                    "timestamp": time.time()
+                }
                 
                 # Resolve DB alerts on return to normal
-                db.query(Alert).filter(Alert.status == "Unresolved").update({
-                    Alert.status: "Resolved",
-                    Alert.resolution_notes: "Normal telemetry restored. Threat cleared."
-                })
+                active_alerts = db.query(Alert).filter(Alert.status == "Unresolved").all()
+                for a in active_alerts:
+                    a.status = "Resolved"
+                    a.resolution_notes = "Disengaged by SOC Administrator / Threat Neutralized."
                 db.query(Device).update({Device.status: "Online"})
+
+                audit = AuditLog(
+                    username="SOC-Admin",
+                    action="PURE_ML_THREAT_NEUTRALIZED",
+                    target="All ICU Telemetry Nodes",
+                    severity="Info",
+                    result="Success"
+                )
+                db.add(audit)
                 db.commit()
             else:
                 for p_id in self.simulator.patients:
@@ -270,14 +301,41 @@ class SimulatorService:
 
                 # Restore devices to Online
                 db.query(Device).update({Device.status: "Online"})
+
+                # Add audit log
+                audit = AuditLog(
+                    username="SOC-Admin",
+                    action="THREAT_NEUTRALIZED",
+                    target="All ICU Telemetry Nodes",
+                    severity="Info",
+                    result="Success"
+                )
+                db.add(audit)
                 db.commit()
 
                 # Clear quarantine and reset simulators
                 self.ids.quarantine_queue.clear()
                 self.ids.blocked_clients.clear()
-                for p_id in self.simulator.patients:
-                    self.simulator.set_attack_mode(p_id, "Normal", ips_disabled=False)
-                self.simulator.update_all()
+                self.ids.packet_timestamps.clear()
+                self.ids.last_pure_ml_diagnostics = {
+                    "l2_network": {
+                        "features": {"duration": 0.0, "rate": 5.0, "tot_size": 150, "avg_size": 150, "iat": 0.2},
+                        "rf_pred": 0,
+                        "rf_prob_attack": 0.0,
+                        "rf_prob_benign": 1.0,
+                        "is_anomaly": False
+                    },
+                    "l1_physiological": {
+                        "features": {"heart_rate": 75.0, "spo2": 98.0, "lead_impedance": 500.0, "infusion_rate": 5.0},
+                        "if_pred": 1,
+                        "if_anomaly_score": 0.20,
+                        "is_anomaly": False
+                    },
+                    "system_mode": self.get_system_mode(),
+                    "last_decision": "Normal",
+                    "timestamp": time.time()
+                }
+                self.simulator.reset_all_to_normal()
                 return state_data
 
             # Active attack: resolve details

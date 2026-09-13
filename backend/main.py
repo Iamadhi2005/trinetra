@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import asyncio
 import os
 import uvicorn
@@ -71,9 +74,9 @@ def seed_initial_data():
             
         # Seed patients if empty
         if db.query(Patient).count() == 0:
-            db.add(Patient(id="patient_101", name="John Doe", age=52, phone="+1-555-0101", guardian_name="Jane Doe (Spouse)", guardian_phone="+1-555-0102", status="Normal", is_calibrated=True, calibration_progress=100))
-            db.add(Patient(id="patient_102", name="Robert Smith", age=61, phone="+1-555-0201", guardian_name="Mary Smith (Mother)", guardian_phone="+1-555-0202", status="Normal", is_calibrated=True, calibration_progress=100))
-            db.add(Patient(id="patient_103", name="Alice Johnson", age=38, phone="+1-555-0301", guardian_name="David Johnson (Father)", guardian_phone="+1-555-0302", status="Normal", is_calibrated=True, calibration_progress=100))
+            db.add(Patient(id="patient_101", name="John Doe", age=52, phone="+91-98765-0101", guardian_name="Jane (Spouse)", guardian_phone="+91-98765-0102", status="Normal", is_calibrated=True, calibration_progress=100))
+            db.add(Patient(id="patient_102", name="Robert Smith", age=61, phone="+91-98765-0201", guardian_name="Mary Smith (Mother)", guardian_phone="+91-98765-0202", status="Normal", is_calibrated=True, calibration_progress=100))
+            db.add(Patient(id="patient_103", name="Alice Johnson", age=38, phone="+91-98765-0301", guardian_name="David Johnson (Father)", guardian_phone="+91-98765-0302", status="Normal", is_calibrated=True, calibration_progress=100))
             db.commit()
             
         # Seed devices if empty
@@ -263,9 +266,12 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
     except Exception as e:
         pass
 
+from backend.mqtt_service import start_mqtt_listener
+
 @app.on_event("startup")
 async def on_startup():
     asyncio.create_task(simulator_background_loop())
+    start_mqtt_listener()
 
 @app.get("/")
 def root():

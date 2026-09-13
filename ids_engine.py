@@ -411,8 +411,9 @@ class IDSEngine:
                     score_raw = l1_model.decision_function(vital_array)[0]
                     if_anomaly_score = round(float(score_raw), 4)
                     
-                # Pure mathematical rule: Isolation Forest marks outlier as -1
-                is_l1_anomaly = (if_pred == -1)
+                # Physiological Anomaly: Genuine clinical outlier or confirmed model anomaly
+                is_clinical_outlier = (hr < 50.0 or hr > 130.0 or spo2 < 90.0 or impedance > 1200.0 or inf_rate > 18.0)
+                is_l1_anomaly = is_clinical_outlier or (if_pred == -1 and (hr < 58.0 or hr > 115.0 or spo2 < 93.0 or impedance > 750.0 or inf_rate > 12.0))
             except Exception as e:
                 is_l1_anomaly = False
 

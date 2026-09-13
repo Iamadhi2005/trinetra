@@ -197,6 +197,8 @@ export default function App() {
       setAttackState(res.state || { attack_mode: nextMode, target_patient: target });
 
       if (nextMode === "Normal") {
+        setAlerts((prev) => prev.filter((a) => a.status === "Resolved"));
+        setQuarantine([]);
         addLog(
           "Disengaged all test payloads. Telemetry restored to normal baseline.",
           "defense"
@@ -220,6 +222,8 @@ export default function App() {
     try {
       await disengageAll();
       setAttackState({ attack_mode: "Normal", target_patient: "" });
+      setAlerts((prev) => prev.filter((a) => a.status === "Resolved"));
+      setQuarantine([]);
       addLog("EMERGENCY DISENGAGE: All synthetic test vectors halted.", "defense");
       await syncState();
     } catch (err: any) {

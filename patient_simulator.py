@@ -51,6 +51,69 @@ class DeviceSimulator:
         self.ips_disabled = True
         self.replay_buffer = []
 
+    def reset_to_normal(self):
+        """Resets physiological metrics, lead impedance, pump status, and battery back to healthy clinical baseline."""
+        self.attack_mode = "Normal"
+        self.ips_disabled = False
+        self.replay_buffer = []
+        
+        telemetry_file = f"data/telemetry_{self.patient_id}.json"
+        base_hr = None
+        base_spo2 = None
+        if os.path.exists(telemetry_file):
+            try:
+                import json
+                with open(telemetry_file, "r") as f:
+                    tdata = json.load(f)
+                    base_hr = tdata.get("base_heart_rate")
+                    base_spo2 = tdata.get("base_spo2")
+            except Exception:
+                pass
+
+        seed_val = sum(ord(c) for c in str(self.patient_id))
+        r = random.Random(seed_val)
+
+        self.heart_rate = float(base_hr) if base_hr is not None else float(r.randint(70, 80))
+        self.spo2 = float(base_spo2) if base_spo2 is not None else round(r.uniform(97.5, 99.0), 1)
+        self.lead_impedance = float(r.randint(490, 510))
+        self.pacing_rate = float(r.randint(68, 72))
+        self.battery = float(r.randint(95, 100))
+        self.infusion_rate = 5.0
+        self.pump_status = "Pumping Normal"
+        self.status = "Online"
+        self.systolic_bp = float(r.randint(115, 122))
+        self.diastolic_bp = float(r.randint(74, 80))
+        self.temperature = round(r.uniform(36.7, 37.1), 1)
+        self.respiration_rate = float(r.randint(14, 16))
+
+        # Persist healthy baseline immediately to telemetry config
+        if os.path.exists(telemetry_file):
+            try:
+                import json
+                with open(telemetry_file, "r") as f:
+                    tdata = json.load(f)
+                tdata.update({
+                    "status": "Online",
+                    "attack_mode": "Normal",
+                    "heart_rate": round(self.heart_rate, 1),
+                    "spo2": round(self.spo2, 1),
+                    "lead_impedance": round(self.lead_impedance, 1),
+                    "pacing_rate": round(self.pacing_rate, 1),
+                    "battery": round(self.battery, 1),
+                    "infusion_rate": round(self.infusion_rate, 1),
+                    "pump_status": self.pump_status,
+                    "blood_pressure": f"{int(self.systolic_bp)}/{int(self.diastolic_bp)}",
+                    "systolic_bp": round(self.systolic_bp, 1),
+                    "diastolic_bp": round(self.diastolic_bp, 1),
+                    "temperature": round(self.temperature, 1),
+                    "respiration_rate": round(self.respiration_rate, 1),
+                    "last_updated": time.time()
+                })
+                with open(telemetry_file, "w") as f:
+                    json.dump(tdata, f, indent=2)
+            except Exception:
+                pass
+
     def update_vitals(self):
         """Updates physiological vital signs dynamically based on state."""
         if self.attack_mode == "Normal":
@@ -76,11 +139,18 @@ class DeviceSimulator:
             self.respiration_rate += random.uniform(-0.5, 0.5)
             self.respiration_rate = max(12.0, min(20.0, self.respiration_rate))
             
-            self.battery -= 0.0005
-            self.battery = max(0.0, self.battery)
+            self.pacing_rate = max(65.0, min(75.0, self.pacing_rate + random.uniform(-0.2, 0.2)))
+            
+            if self.battery < 95.0:
+                self.battery = min(100.0, self.battery + 2.0)
+            else:
+                self.battery -= 0.0005
+            self.battery = max(0.0, min(100.0, self.battery))
+            
             self.infusion_rate = 5.0
             self.infused_volume += (self.infusion_rate / 3600.0) # volume accumulated
             self.pump_status = "Pumping Normal"
+            self.status = "Online"
             
         elif self.attack_mode == "Override":
             if self.ips_disabled:
@@ -190,20 +260,16 @@ class PatientSimulator:
             df = get_patients_from_db()
             if df.empty:
                 os.makedirs("data/photos", exist_ok=True)
-                add_patient_to_db("patient_101", "John Doe", "+1-555-0101", "Jane Doe (Spouse)", "+1-555-0102", ["ECG Monitor", "Pulse Oximeter", "Pacemaker", "Infusion Pump"], "data/photos/patient_101.png")
-                add_patient_to_db("patient_102", "Robert Smith", "+1-555-0201", "Mary Smith (Mother)", "+1-555-0202", ["ECG Monitor", "Pulse Oximeter", "Infusion Pump"], "")
-                add_patient_to_db("patient_103", "Alice Johnson", "+1-555-0301", "David Johnson (Father)", "+1-555-0302", ["ECG Monitor", "Pulse Oximeter", "Pacemaker"], "")
+                add_patient_to_db("patient_101", "Aarav Sharma", "+91 98765 43210", "Priya Sharma (Spouse)", "+91 98765 43211", ["ECG Monitor", "Pulse Oximeter", "Pacemaker", "Infusion Pump"], "data/photos/patient_101.png")
+                add_patient_to_db("patient_102", "Rajesh Kumar", "+91 98450 12345", "Sunita Kumar (Spouse)", "+91 98450 12346", ["ECG Monitor", "Pulse Oximeter", "Infusion Pump"], "")
+                add_patient_to_db("patient_103", "Ananya Iyer", "+91 97123 45678", "Ramesh Iyer (Father)", "+91 97123 45679", ["ECG Monitor", "Pulse Oximeter", "Pacemaker"], "")
                 df = get_patients_from_db()
             for _, row in df.iterrows():
                 all_patient_ids.add(row['patient_id'])
         except Exception:
             pass
 
-        # 3. Retain active simulators already instantiated
-        for p_id in list(self.patients.keys()):
-            all_patient_ids.add(p_id)
-
-        # Update simulator objects
+        # Update simulator objects - only keep patients currently present in database
         new_patients = {}
         for p_id in all_patient_ids:
             if p_id in self.patients:
@@ -212,6 +278,17 @@ class PatientSimulator:
                 new_patients[p_id] = DeviceSimulator(p_id)
         self.patients = new_patients
 
+    def remove_patient(self, patient_id: str):
+        """Removes a patient from the in-memory simulator and deletes telemetry cache."""
+        if patient_id in self.patients:
+            del self.patients[patient_id]
+        telemetry_file = f"data/telemetry_{patient_id}.json"
+        if os.path.exists(telemetry_file):
+            try:
+                os.remove(telemetry_file)
+            except Exception:
+                pass
+
     def get_or_create_patient(self, patient_id: str) -> DeviceSimulator:
         if patient_id not in self.patients:
             self.patients[patient_id] = DeviceSimulator(patient_id)
@@ -219,8 +296,17 @@ class PatientSimulator:
         
     def set_attack_mode(self, patient_id, mode, ips_disabled):
         if patient_id in self.patients:
-            self.patients[patient_id].attack_mode = mode
-            self.patients[patient_id].ips_disabled = ips_disabled
+            p = self.patients[patient_id]
+            prev_mode = p.attack_mode
+            p.attack_mode = mode
+            p.ips_disabled = ips_disabled
+            if mode == "Normal" and prev_mode != "Normal":
+                p.reset_to_normal()
+
+    def reset_all_to_normal(self):
+        for p in self.patients.values():
+            p.reset_to_normal()
+        self.update_all()
             
     def update_all(self):
         for p in self.patients.values():
@@ -269,3 +355,32 @@ class PatientSimulator:
         
         payload["signature"] = self.generate_signature(p, device_id, timestamp)
         return payload
+
+if __name__ == "__main__":
+    import sys
+    if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+    if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8')
+        
+    print("=========================================================================")
+    print("      TRINETRA CLINICAL PATIENT TELEMETRY SIMULATOR MONITOR             ")
+    print("=========================================================================")
+    print("Starting continuous live medical device telemetry generation...\n")
+    
+    sim = PatientSimulator()
+    print(f"Loaded {len(sim.patients)} simulated patient devices: {list(sim.patients.keys())}\n")
+    
+    try:
+        while True:
+            sim.update_all()
+            print(f"--- [TELEMETRY TICK: {time.strftime('%H:%M:%S')}] ---")
+            for p_id in list(sim.patients.keys()):
+                payload = sim.get_payload(p_id, f"icu_monitor_{p_id}")
+                vitals = payload.get("vitals", {}) if payload else {}
+                print(f"🟢 [LIVE] Patient: {p_id} | HR: {vitals.get('heart_rate', 0):.1f} bpm | SpO2: {vitals.get('spo2', 0):.1f}% | BP: {vitals.get('systolic_bp', 0):.0f}/{vitals.get('diastolic_bp', 0):.0f} mmHg | Temp: {vitals.get('body_temperature', 0):.1f} °C")
+            print("-" * 75)
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\nSimulator stopped safely.")
+

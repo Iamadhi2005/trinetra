@@ -64,11 +64,11 @@ export default function UrgentAlertBanner() {
   if (alertCount === 0 || dismissed) return null;
 
   return (
-    <div className="bg-[#78281F] text-[#F1948A] border-b-2 border-[#EC7063] px-6 py-3 flex items-center justify-between shadow-lg animate-pulse">
-      <div className="flex items-center gap-3 font-semibold text-sm">
-        <AlertTriangle className="w-5 h-5 text-[#EC7063] animate-bounce" />
+    <div className="bg-[#78281F] text-[#F1948A] border-b-2 border-[#EC7063] px-6 py-2.5 flex items-center justify-between shadow-md">
+      <div className="flex items-center gap-3 font-semibold text-xs sm:text-sm">
+        <AlertTriangle className="w-4 h-4 text-[#EC7063] animate-pulse flex-shrink-0" />
         <span>
-          🚨 URGENT: {alertCount} CLINICAL THREATS DETECTED & ISOLATED IN SOFT QUARANTINE!
+          Clinical Alert: {alertCount} medical {alertCount === 1 ? "device" : "devices"} isolated for signal protection and patient safety.
         </span>
       </div>
       <div className="flex items-center gap-2">

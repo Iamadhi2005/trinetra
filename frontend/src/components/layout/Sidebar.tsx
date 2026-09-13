@@ -9,7 +9,6 @@ import {
   Users,
   ShieldAlert,
   Wifi,
-  Cpu,
   Bell,
   HardDrive,
   FileText,
@@ -17,7 +16,6 @@ import {
   ShieldCheck,
   Settings,
   LogOut,
-  Zap,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -25,9 +23,6 @@ const NAV_ITEMS = [
   { label: "Patient Monitor", href: "/patients", icon: Users },
   { label: "Security Monitor", href: "/security", icon: ShieldAlert },
   { label: "Network Status", href: "/network", icon: Wifi },
-  { label: "AI & IDS Status", href: "/ai-ids", icon: Cpu },
-  { label: "Pure ML Attacker Hub", href: "/attacker-pure-ml", icon: Zap },
-  { label: "Attacker Hub (Demo)", href: "/attacker", icon: ShieldAlert },
   { label: "Alerts", href: "/alerts", icon: Bell },
   { label: "Device Management", href: "/devices", icon: HardDrive },
   { label: "Audit Logs", href: "/logs", icon: FileText },
