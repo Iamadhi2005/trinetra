@@ -21,11 +21,11 @@ MQTT_ACTUATOR_TOPIC_PREFIX = "hospital/actuator"
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print(f"🟢 [MQTT BRIDGE] Connected successfully to MQTT Broker at {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}")
+        print(f"[MQTT BRIDGE] Connected successfully to MQTT Broker at {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}")
         client.subscribe(MQTT_TOPIC_SUB)
-        print(f"📡 [MQTT BRIDGE] Subscribed to topic stream: {MQTT_TOPIC_SUB}")
+        print(f"[MQTT BRIDGE] Subscribed to topic stream: {MQTT_TOPIC_SUB}")
     else:
-        print(f"🔴 [MQTT BRIDGE] Failed to connect to MQTT Broker (Return Code: {rc})")
+        print(f"[MQTT BRIDGE] Failed to connect to MQTT Broker (Return Code: {rc})")
 
 def on_message(client, userdata, msg):
     try:
@@ -89,7 +89,7 @@ def on_message(client, userdata, msg):
                     "reason": res.get("alert", "IPS Intervention Triggered")
                 })
                 client.publish(actuator_topic, control_payload, qos=1)
-                print(f"🚨 [IPS ACTUATOR] Quarantine override dispatched to ESP32 on topic: {actuator_topic}")
+                print(f"[IPS ACTUATOR] Quarantine override dispatched to ESP32 on topic: {actuator_topic}")
             else:
                 db.commit()
         finally:
@@ -113,7 +113,7 @@ def on_message(client, userdata, msg):
         p_dev.attack_mode = "Normal" if status != "Quarantine" else "Hardware Anomaly"
             
     except Exception as e:
-        print(f"⚠️ [MQTT BRIDGE ERROR] Failed to process message: {e}")
+        print(f"[MQTT BRIDGE ERROR] Failed to process message: {e}")
 
 def start_mqtt_listener():
     """Starts the background MQTT client listener."""
@@ -126,7 +126,7 @@ def start_mqtt_listener():
         client.loop_start()
         return client
     except Exception as e:
-        print(f"ℹ️ [MQTT BRIDGE] MQTT Broker not reachable at {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}. (Optional when using software simulator).")
+        print(f"[MQTT BRIDGE] MQTT Broker not reachable at {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}. (Optional when using software simulator).")
         return None
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ type TabType = "scenarios" | "alerts" | "monitor" | "settings";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("scenarios");
-  const [serverUrl, setLocalServerUrl] = useState<string>("https://soft-mirrors-clean.loca.lt");
+  const [serverUrl, setLocalServerUrl] = useState<string>("http://192.168.1.74:8000");
   const [token, setToken] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
 
@@ -261,9 +261,12 @@ export default function App() {
   };
 
   const handleSaveServerUrl = async (url: string) => {
+    // Await the save fully so AsyncStorage has the new URL before pingBackend() reads it
     await setServerUrl(url);
     setLocalServerUrl(url);
     addLog(`Server URL updated to: ${url}`, "info");
+    // Small yield to ensure AsyncStorage flush completes before the ping fires
+    await new Promise((resolve) => setTimeout(resolve, 150));
   };
 
   const handleTestConnection = async (): Promise<{

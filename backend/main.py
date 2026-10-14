@@ -25,6 +25,7 @@ from backend.routes.settings_routes import router as settings_router
 from backend.routes.report_routes import router as report_router
 from backend.routes.log_routes import router as log_router
 from backend.routes.ips_routes import router as ips_router
+from backend.routes.adversary_routes import router as adversary_router
 from backend.simulator_service import global_simulator_service
 
 # Create database tables
@@ -57,6 +58,7 @@ app.include_router(settings_router)
 app.include_router(report_router)
 app.include_router(log_router)
 app.include_router(ips_router)
+app.include_router(adversary_router)
 
 def seed_initial_data():
     db = SessionLocal()

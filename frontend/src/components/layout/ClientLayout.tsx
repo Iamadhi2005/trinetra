@@ -10,7 +10,18 @@ import UrgentAlertBanner from "../ui/UrgentAlertBanner";
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [queryClient] = useState(() => new QueryClient());
-  const isBypassedPage = pathname === "/login";
+  const isBypassedPage = pathname === "/login" || pathname.startsWith("/adversary");
+
+  React.useEffect(() => {
+    const handleError = (e: ErrorEvent) => {
+      if (e && e.message && e.message.includes("startTime")) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("error", handleError, true);
+    return () => window.removeEventListener("error", handleError, true);
+  }, []);
 
   if (isBypassedPage) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;

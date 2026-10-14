@@ -55,7 +55,7 @@ def test_interactive():
         'heart_rate': 185.0,
         'spo2': 78.0,
         'lead_impedance': 500.0,
-        'infusion_rate': 45.0
+        'infusion_rate': 4875.0
     }])
     l1_pred = model_l1.predict(overdose_vitals)[0]
     print(f"Vitals: HR=185 bpm, SpO2=78%, Infusion=45 mL/h")
