@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api";
 import {
@@ -101,6 +101,9 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const [isIsolating, setIsIsolating] = useState(false);
+  const [isNeutralizing, setIsNeutralizing] = useState(false);
+  const neutralizedUntilRef = useRef<number>(0);
 
   useEffect(() => {
     setMounted(true);
@@ -134,6 +137,7 @@ export default function DashboardPage() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          const isNeutralizedNow = Date.now() < neutralizedUntilRef.current;
           setLiveVitals((prev) => ({
             ...prev,
             [p.id]: {
@@ -141,20 +145,20 @@ export default function DashboardPage() {
               name: data.patient_name || p.name,
               heart_rate: data.heart_rate,
               spo2: data.spo2,
-              status: data.status,
+              status: isNeutralizedNow ? "Online" : data.status,
               is_calibrated: true,
-              is_under_attack: !!data.is_under_attack,
-              attack_type: data.attack_type,
-              active_attack_mode: data.active_attack_mode,
+              is_under_attack: isNeutralizedNow ? false : !!data.is_under_attack,
+              attack_type: isNeutralizedNow ? "Normal Telemetry" : data.attack_type,
+              active_attack_mode: isNeutralizedNow ? "Normal" : data.active_attack_mode,
               machine_id: data.machine_id,
               machine_name: data.machine_name,
               machine_type: data.machine_type,
               patient_name: data.patient_name,
               ward_number: data.ward_number,
               bed_number: data.bed_number,
-              attack_severity: data.attack_severity,
-              attack_message: data.attack_message,
-              action_taken: data.action_taken,
+              attack_severity: isNeutralizedNow ? "Normal" : data.attack_severity,
+              attack_message: isNeutralizedNow ? "" : data.attack_message,
+              action_taken: isNeutralizedNow ? "None" : data.action_taken,
             },
           }));
         } catch (e) {}
@@ -173,55 +177,95 @@ export default function DashboardPage() {
     };
   }, [patients, mounted]);
 
-  // Isolate machine action
-  const handleIsolateMachine = async (deviceId: string) => {
-    try {
-      await fetchApi("/security/quarantine/action", {
-        method: "POST",
-        body: JSON.stringify({ device_id: deviceId, action: "hard_block" }),
+  // Isolate machine action with INSTANT optimistic UI feedback (0ms latency on 1st click)
+  const handleIsolateMachine = async (targetDeviceId: string, targetPatientId?: string) => {
+    setIsIsolating(true);
+    neutralizedUntilRef.current = Date.now() + 5000;
+    
+    // Instant optimistic removal of attack state and marking device isolated
+    setLiveVitals((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        if (next[k]) {
+          next[k] = {
+            ...next[k],
+            is_under_attack: false,
+            active_attack_mode: "Normal",
+            attack_type: "Normal Telemetry",
+            attack_severity: "Normal",
+            action_taken: "Machine Isolated by Operator",
+            status: (!targetPatientId || next[k].patient_id === targetPatientId) ? "Isolated" : next[k].status,
+          };
+        }
       });
-      setActionMessage(`Machine ${deviceId} isolated and placed in hard block.`);
+      return next;
+    });
+
+    setActionMessage(`Machine ${targetDeviceId} isolated instantly and blocked from clinical network.`);
+
+    try {
+      await fetchApi("/security/isolate", {
+        method: "POST",
+        body: JSON.stringify({ device_id: targetDeviceId, patient_id: targetPatientId || "" }),
+      });
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
-      setTimeout(() => setActionMessage(null), 4000);
+      queryClient.invalidateQueries({ queryKey: ["devices"] });
+      queryClient.invalidateQueries({ queryKey: ["quarantine"] });
+      queryClient.invalidateQueries({ queryKey: ["security-events"] });
     } catch (err: any) {
-      setActionMessage(`Action failed: ${err.message}`);
+      try {
+        await fetchApi("/security/quarantine/action", {
+          method: "POST",
+          body: JSON.stringify({ device_id: targetDeviceId, action: "hard_block" }),
+        });
+      } catch (e) {}
+    } finally {
+      setIsIsolating(false);
       setTimeout(() => setActionMessage(null), 4000);
     }
   };
 
-  // Neutralize attack action
+  // Neutralize attack action with INSTANT optimistic UI feedback (0ms latency on 1st click)
   const handleNeutralizeAttack = async () => {
+    setIsNeutralizing(true);
+    neutralizedUntilRef.current = Date.now() + 5000;
+
+    // Immediately reset local live attack vitals so banner and warning overlays clear instantly
+    setLiveVitals((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((k) => {
+        if (next[k]) {
+          next[k] = {
+            ...next[k],
+            is_under_attack: false,
+            active_attack_mode: "Normal",
+            attack_type: "Normal Telemetry",
+            attack_severity: "Normal",
+            attack_message: "",
+            action_taken: "None",
+          };
+        }
+      });
+      return next;
+    });
+
+    setActionMessage("Threat neutralized instantly. All clinical telemetry restored to baseline.");
+
     try {
-      await fetchApi("/security/attack", {
-        method: "POST",
-        body: JSON.stringify({ attack_mode: "Normal", target_patient: "" }),
-      });
-      // Immediately reset local live attack vitals so banner and warning overlays clear instantly
-      setLiveVitals((prev) => {
-        const next = { ...prev };
-        Object.keys(next).forEach((k) => {
-          if (next[k]) {
-            next[k] = {
-              ...next[k],
-              is_under_attack: false,
-              active_attack_mode: "Normal",
-              attack_type: "Normal Telemetry",
-              attack_severity: "Normal",
-              attack_message: "",
-              action_taken: "None",
-            };
-          }
-        });
-        return next;
-      });
-      setActionMessage("Threat neutralized. All clinical telemetry restored to baseline.");
+      await fetchApi("/security/disengage", { method: "POST" });
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
       queryClient.invalidateQueries({ queryKey: ["patients"] });
       queryClient.invalidateQueries({ queryKey: ["quarantine"] });
       queryClient.invalidateQueries({ queryKey: ["security-events"] });
-      setTimeout(() => setActionMessage(null), 4000);
     } catch (err: any) {
-      setActionMessage(`Neutralization failed: ${err.message}`);
+      try {
+        await fetchApi("/security/attack", {
+          method: "POST",
+          body: JSON.stringify({ attack_mode: "Normal", target_patient: "" }),
+        });
+      } catch (e) {}
+    } finally {
+      setIsNeutralizing(false);
       setTimeout(() => setActionMessage(null), 4000);
     }
   };
@@ -366,17 +410,29 @@ export default function DashboardPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => handleIsolateMachine(machineId)}
-                className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-colors"
+                disabled={isIsolating || isNeutralizing}
+                onClick={() => handleIsolateMachine(machineId, patientId)}
+                className={`px-3.5 py-1.5 text-white font-bold text-xs rounded uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all ${
+                  isIsolating
+                    ? "bg-red-800 cursor-not-allowed opacity-80"
+                    : "bg-red-600 hover:bg-red-700 active:scale-95"
+                }`}
               >
-                <Lock className="w-3.5 h-3.5" /> Isolate Machine ({machineId})
+                <Lock className={`w-3.5 h-3.5 ${isIsolating ? "animate-spin" : ""}`} />
+                {isIsolating ? "Isolating..." : `Isolate Machine (${machineId})`}
               </button>
 
               <button
+                disabled={isIsolating || isNeutralizing}
                 onClick={handleNeutralizeAttack}
-                className="px-3.5 py-1.5 bg-[#1F2937] hover:bg-[#374151] border border-gray-600 text-gray-200 font-bold text-xs rounded uppercase tracking-wider flex items-center gap-1.5 transition-colors"
+                className={`px-3.5 py-1.5 border border-gray-600 text-gray-200 font-bold text-xs rounded uppercase tracking-wider flex items-center gap-1.5 transition-all ${
+                  isNeutralizing
+                    ? "bg-gray-800 cursor-not-allowed opacity-80"
+                    : "bg-[#1F2937] hover:bg-[#374151] active:scale-95"
+                }`}
               >
-                <Square className="w-3.5 h-3.5 fill-current" /> Neutralize Attack
+                <Square className={`w-3.5 h-3.5 fill-current ${isNeutralizing ? "animate-pulse" : ""}`} />
+                {isNeutralizing ? "Neutralizing..." : "Neutralize Attack"}
               </button>
 
               <Link

@@ -195,22 +195,33 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
     await websocket.accept()
     
     t_ms = 0
+    loop_tick = 0
+    attack_mode, target_patient = "Normal", ""
+    attack_info = {}
+    
     try:
         while True:
             p_dev = global_simulator_service.simulator.get_or_create_patient(patient_id)
             
-            # Fetch real-time attack state
-            attack_mode, target_patient = global_simulator_service.get_attack_state()
-            dev_attack = getattr(p_dev, "attack_mode", "Normal")
-            
-            effective_attack = attack_mode if (attack_mode != "Normal" and (target_patient == patient_id or not target_patient)) else (dev_attack if dev_attack != "Normal" else "Normal")
-            is_under_attack = effective_attack != "Normal"
+            # Refresh attack state periodically instead of every 20ms to keep event loop free
+            if loop_tick % 8 == 0:
+                attack_mode, target_patient = global_simulator_service.get_attack_state()
+                dev_attack = getattr(p_dev, "attack_mode", "Normal")
+                effective_attack = attack_mode if (attack_mode != "Normal" and (target_patient == patient_id or not target_patient)) else (dev_attack if dev_attack != "Normal" else "Normal")
+                is_under_attack = effective_attack != "Normal"
 
-            attack_info = {}
-            if is_under_attack:
-                attack_info = global_simulator_service.get_attack_details(effective_attack, patient_id)
-            elif attack_mode != "Normal":
-                attack_info = global_simulator_service.get_attack_details(attack_mode, target_patient)
+                if is_under_attack:
+                    attack_info = global_simulator_service.get_attack_details(effective_attack, patient_id)
+                elif attack_mode != "Normal":
+                    attack_info = global_simulator_service.get_attack_details(attack_mode, target_patient)
+                else:
+                    attack_info = {}
+            else:
+                dev_attack = getattr(p_dev, "attack_mode", "Normal")
+                effective_attack = attack_mode if (attack_mode != "Normal" and (target_patient == patient_id or not target_patient)) else (dev_attack if dev_attack != "Normal" else "Normal")
+                is_under_attack = effective_attack != "Normal"
+
+            loop_tick += 1
                 
             hr = getattr(p_dev, "heart_rate", 75.0)
             spo2 = getattr(p_dev, "spo2", 98.0)
@@ -259,13 +270,12 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
             }
             
             await websocket.send_json(payload)
-            t_ms += 20
-            await asyncio.sleep(0.02)
-
+            t_ms += 60
+            await asyncio.sleep(0.06)
             
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except Exception:
         pass
 
 from backend.mqtt_service import start_mqtt_listener

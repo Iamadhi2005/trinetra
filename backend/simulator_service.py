@@ -94,7 +94,18 @@ class SimulatorService:
         self.ids = IDSEngine()
         self.state_file = "data/attack_state.json"
         self.mode_file = "data/system_mode.json"
-        self.system_mode = "standard"
+        self._cached_attack_mode = "Normal"
+        self._cached_target_patient = ""
+        self._last_state_read = 0.0
+        self._details_cache: Dict[str, Any] = {}
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, "r") as f:
+                    d = json.load(f)
+                    self._cached_attack_mode = d.get("attack_mode", "Normal")
+                    self._cached_target_patient = d.get("target_patient", "")
+            except Exception:
+                pass
         if os.path.exists(self.mode_file):
             try:
                 with open(self.mode_file, "r") as f:
@@ -197,17 +208,25 @@ class SimulatorService:
         return state_data
         
     def get_attack_state(self) -> Tuple[str, str]:
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, "r") as f:
-                    data = json.load(f)
-                    return data.get("attack_mode", "Normal"), data.get("target_patient", "")
-            except Exception:
-                pass
-        return "Normal", ""
+        now = time.time()
+        if now - self._last_state_read > 0.5:
+            self._last_state_read = now
+            if os.path.exists(self.state_file):
+                try:
+                    with open(self.state_file, "r") as f:
+                        data = json.load(f)
+                        self._cached_attack_mode = data.get("attack_mode", "Normal")
+                        self._cached_target_patient = data.get("target_patient", "")
+                except Exception:
+                    pass
+        return self._cached_attack_mode, self._cached_target_patient
 
     def get_attack_details(self, attack_mode: str, target_patient: str) -> Dict[str, Any]:
-        """Resolves target patient, device, and alert metadata."""
+        """Resolves target patient, device, and alert metadata with ultra-fast memory caching."""
+        cache_key = f"{attack_mode}_{target_patient}"
+        if cache_key in self._details_cache:
+            return self._details_cache[cache_key]
+
         vec = ATTACK_VECTORS.get(attack_mode, {
             "label": attack_mode,
             "severity": "High",
@@ -258,7 +277,7 @@ class SimulatorService:
             f"— {vec['desc']}. Action: {vec['action_taken']}."
         )
 
-        return {
+        res = {
             "is_active": attack_mode != "Normal",
             "attack_mode": attack_mode,
             "attack_label": vec["label"],
@@ -275,6 +294,8 @@ class SimulatorService:
             "desc": vec["desc"],
             "timestamp": time.time()
         }
+        self._details_cache[cache_key] = res
+        return res
 
     def trigger_attack_now(self, attack_mode: str, target_patient: str) -> Dict[str, Any]:
         """

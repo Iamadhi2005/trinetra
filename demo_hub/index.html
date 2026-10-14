@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRINETRA Security Testbed — Standalone Evaluation Console</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300ff66'><path d='M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z'/></svg>">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="top-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <polyline points="9 12 11 14 15 10"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>
+            TRINETRA Security Testbed
+            <span class="badge-tag">Port 3002</span>
+          </h1>
+          <p>IoMT Security Scenario & Machine Learning Evaluation Platform</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Backend Gateway Status -->
+        <div class="status-indicator" id="backend-status">
+          <span class="status-dot"></span>
+          <span id="backend-status-text">Backend Connected: 8000</span>
+        </div>
+
+        <!-- Simulated Patient Unit -->
+        <div class="target-select-wrap">
+          <label for="target-patient-select">Patient Unit:</label>
+          <select id="target-patient-select" class="target-select" onchange="handleTargetChange(this.value)">
+            <option value="patient_101">John Doe (ICU-A / Bed 01)</option>
+            <option value="patient_102" selected>Robert Smith (ICU-A / Bed 02)</option>
+            <option value="patient_103">Alice Johnson (ICU-B / Bed 01)</option>
+            <option value="">All Hospital Units (Broadcast)</option>
+          </select>
+        </div>
+
+        <!-- Reset to Baseline -->
+        <button id="btn-emergency-disengage" class="btn-reset" onclick="handleEmergencyDisengage()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+          </svg>
+          <span>Reset to Normal</span>
+        </button>
+
+        <!-- Recalibrate Sensors -->
+        <button id="btn-recalibrate" class="btn-reset" onclick="handleRecalibrate()" title="Recalibrate sensors to baseline">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+          <span>Recalibrate</span>
+        </button>
+
+        <!-- Link to Hospital Central Dashboard -->
+        <a href="http://localhost:3000" target="_blank" class="btn-link-hospital" title="Open Hospital Dashboard in separate tab">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M9 3v18"/>
+          </svg>
+          <span>Hospital Dashboard (Port 3000) ↗</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Operational Status Banner -->
+  <div class="status-banner">
+    <div class="banner-container">
+      <div class="banner-left">
+        <span id="banner-badge" class="banner-pill idle">Normal Baseline</span>
+        <span id="banner-desc" class="banner-text">All IoMT telemetry running within verified safe physiological and network thresholds.</span>
+      </div>
+      <div class="banner-right">
+        <span>Active Patient: <strong id="banner-target-name" style="color: var(--text-primary);">Robert Smith</strong></span>
+        <span>Duration: <span id="banner-timer" class="timer-span">00:00</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Layout -->
+  <main class="main-wrapper">
+
+    <!-- Live Telemetry KPI Strip -->
+    <section class="target-hud-strip">
+      <div class="hud-item">
+        <div class="hud-label">Heart Rate</div>
+        <div class="hud-value"><span id="hud-hr">74</span> <span class="hud-unit">bpm</span></div>
+        <div class="hud-sub">Normal: 60 - 100 bpm</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label">Oxygen (SpO2)</div>
+        <div class="hud-value"><span id="hud-spo2">98.5</span> <span class="hud-unit">%</span></div>
+        <div class="hud-sub">Normal: 95 - 100%</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label">Blood Pressure</div>
+        <div class="hud-value"><span id="hud-bp">120/80</span> <span class="hud-unit">mmHg</span></div>
+        <div class="hud-sub">Systolic / Diastolic</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label">Infusion Pump</div>
+        <div class="hud-value"><span id="hud-infusion">1.0</span> <span class="hud-unit">mL/h</span></div>
+        <div class="hud-sub">Safe KVO Baseline</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label">Pacing Rate</div>
+        <div class="hud-value"><span id="hud-pacing">70</span> <span class="hud-unit">ppm</span></div>
+        <div class="hud-sub">Lead: 520 Ω</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label">Device Battery</div>
+        <div class="hud-value"><span id="hud-battery">98</span> <span class="hud-unit">%</span></div>
+        <div class="hud-sub">Power Reserve: Healthy</div>
+      </div>
+      <div class="hud-item">
+        <div class="hud-label">Protection State</div>
+        <div style="margin-top: 4px;">
+          <span id="hud-quarantine-badge" class="quarantine-tag online">Active / Secure</span>
+        </div>
+        <div class="hud-sub" id="hud-quarantine-sub">Zero-Trust IPS Active</div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('scenarios')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <span>Security Test Scenarios</span>
+        <span class="tab-badge">7 Scenarios</span>
+      </button>
+
+      <button class="tab-btn" onclick="switchTab('pure-ml')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+        <span>Machine Learning Evaluator</span>
+        <span class="tab-badge">Scikit-Learn</span>
+      </button>
+
+      <button class="tab-btn" onclick="switchTab('defense')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <span>Autonomous Defense Rules</span>
+      </button>
+    </nav>
+
+    <!-- Tab 1: Security Test Scenarios -->
+    <div id="tab-pane-scenarios" class="tab-pane active">
+      <div class="section-meta">
+        <div class="section-title">
+          <span>Security Verification Scenarios (Table 6 Specifications)</span>
+        </div>
+        <div class="category-filters">
+          <button class="filter-btn active" onclick="filterCategory('all', this)">All Categories</button>
+          <button class="filter-btn" onclick="filterCategory('layer1', this)">Physiology & Medical Devices</button>
+          <button class="filter-btn" onclick="filterCategory('layer2', this)">Network & Protocols</button>
+        </div>
+      </div>
+
+      <!-- Scenarios Grid -->
+      <div class="scenarios-grid" id="scenarios-grid">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+    </div>
+
+    <!-- Tab 2: Machine Learning Evaluator -->
+    <div id="tab-pane-pure-ml" class="tab-pane">
+      <div class="pure-ml-layout">
+        <!-- Left: Interactive Sliders -->
+        <div class="sliders-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="4" y1="21" x2="4" y2="14"/>
+                <line x1="4" y1="10" x2="4" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12" y2="3"/>
+                <line x1="20" y1="21" x2="20" y2="16"/>
+                <line x1="20" y1="12" x2="20" y2="3"/>
+                <line x1="1" y1="14" x2="7" y2="14"/>
+                <line x1="9" y1="8" x2="15" y2="8"/>
+                <line x1="17" y1="16" x2="23" y2="16"/>
+              </svg>
+              <span>Network Flow Feature Synthesizer (CIC-IoMT-2024)</span>
+            </div>
+            <span class="badge-tag">Mathematical Evaluation</span>
+          </div>
+
+          <!-- Presets -->
+          <div>
+            <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 6px;">
+              Standard Traffic Profiles:
+            </div>
+            <div class="presets-row">
+              <button class="preset-chip" onclick="applyPreset('benign')">Standard Clinical Flow</button>
+              <button class="preset-chip" onclick="applyPreset('dos')">High-Rate Packet Flood</button>
+              <button class="preset-chip" onclick="applyPreset('mitm')">Payload Drift (MitM)</button>
+              <button class="preset-chip" onclick="applyPreset('micro')">Micro-Burst Anomaly</button>
+            </div>
+          </div>
+
+          <!-- Sliders -->
+          <div class="slider-group">
+            <div class="slider-label-row">
+              <span class="slider-name">Flow Duration</span>
+              <span class="slider-val-box"><span id="val-duration">2.4</span> ms</span>
+            </div>
+            <input type="range" min="0.1" max="15.0" step="0.1" value="2.4" class="range-slider" id="slider-duration" oninput="updateSlider('duration', this.value)">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label-row">
+              <span class="slider-name">Packet Rate</span>
+              <span class="slider-val-box"><span id="val-packet-rate">2.0</span> pkts/sec</span>
+            </div>
+            <input type="range" min="0.5" max="250.0" step="0.5" value="2.0" class="range-slider" id="slider-packet-rate" oninput="updateSlider('packet-rate', this.value)">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label-row">
+              <span class="slider-name">Total Packet Size</span>
+              <span class="slider-val-box"><span id="val-packet-size">320</span> bytes</span>
+            </div>
+            <input type="range" min="50" max="4500" step="10" value="320" class="range-slider" id="slider-packet-size" oninput="updateSlider('packet-size', this.value)">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label-row">
+              <span class="slider-name">Average Packet Size</span>
+              <span class="slider-val-box"><span id="val-avg-packet-size">160</span> bytes</span>
+            </div>
+            <input type="range" min="40" max="1500" step="10" value="160" class="range-slider" id="slider-avg-packet-size" oninput="updateSlider('avg-packet-size', this.value)">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-label-row">
+              <span class="slider-name">Inter-Arrival Time (IAT)</span>
+              <span class="slider-val-box"><span id="val-iat">500.0</span> ms</span>
+            </div>
+            <input type="range" min="0.5" max="2000.0" step="0.5" value="500.0" class="range-slider" id="slider-iat" oninput="updateSlider('iat', this.value)">
+          </div>
+
+          <!-- Actions -->
+          <div class="pure-actions-row">
+            <button class="btn-pure-evaluate" onclick="handleEvaluatePureML()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 14 14"/>
+              </svg>
+              <span>Compute Model Prediction</span>
+            </button>
+            <button class="btn-pure-inject" onclick="handleInjectPureML()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              <span>Inject Flow into Network</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Scikit-Learn Inference Gauges -->
+        <div class="gauges-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+              <span>Real-Time Model Outputs</span>
+            </div>
+            <span class="badge-tag">Scikit-Learn</span>
+          </div>
+
+          <!-- Layer 2 Gauge -->
+          <div class="gauge-card">
+            <div class="gauge-head">
+              <span>Layer 2: Random Forest Classifier</span>
+              <span id="l2-status-pill" class="badge-tag" style="background: var(--color-emerald-subtle); color: var(--color-emerald); border-color: var(--color-emerald-border);">Benign</span>
+            </div>
+            <div class="gauge-score-row">
+              <span class="gauge-score" id="l2-prob-display">4.2%</span>
+              <span style="font-size: 11px; color: var(--text-muted);">P(Attack Probability)</span>
+            </div>
+            <div class="gauge-bar-track">
+              <div id="l2-prob-bar" class="gauge-bar-fill" style="width: 4.2%; background-color: var(--color-emerald);"></div>
+            </div>
+            <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
+              <span>0% (Safe)</span>
+              <span>50% Threshold</span>
+              <span>100% (Anomalous)</span>
+            </div>
+          </div>
+
+          <!-- Layer 1 Gauge -->
+          <div class="gauge-card">
+            <div class="gauge-head">
+              <span>Layer 1: Isolation Forest (Physiology)</span>
+              <span id="l1-status-pill" class="badge-tag" style="background: var(--color-emerald-subtle); color: var(--color-emerald); border-color: var(--color-emerald-border);">Normal</span>
+            </div>
+            <div class="gauge-score-row">
+              <span class="gauge-score" id="l1-score-display">+0.184</span>
+              <span style="font-size: 11px; color: var(--text-muted);">Anomaly Score [-0.5 to +0.5]</span>
+            </div>
+            <div class="gauge-bar-track">
+              <div id="l1-score-bar" class="gauge-bar-fill" style="width: 72%; background-color: var(--color-emerald);"></div>
+            </div>
+            <div style="font-size: 10.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
+              <span>-0.5 (Severe Outlier)</span>
+              <span>0.0 (Boundary)</span>
+              <span>+0.5 (Normal)</span>
+            </div>
+          </div>
+
+          <!-- Overall Decision Banner -->
+          <div class="verdict-banner">
+            <div class="verdict-title">Model Classification Verdict</div>
+            <div id="verdict-text" class="verdict-state benign">Benign Medical Telemetry</div>
+            <div id="verdict-details" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+              Flow telemetry conforms to standard physiological and clinical transmission parameters.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Autonomous Defense Rules View -->
+    <div id="tab-pane-defense" class="tab-pane">
+      <div class="section-meta">
+        <div class="section-title">
+          <span>Active Intrusion Prevention (IPS) Safeguards</span>
+        </div>
+      </div>
+      <div class="scenarios-grid" id="ips-rules-grid">
+        <!-- Rendered by app.js -->
+      </div>
+    </div>
+
+    <!-- System Event Audit Log -->
+    <section class="terminal-wrapper">
+      <div class="terminal-header">
+        <div class="terminal-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          <span>Security Simulation Activity & Audit Event Stream</span>
+        </div>
+        <div class="terminal-actions">
+          <button class="term-btn" onclick="copyTerminalLogs()">Copy Logs</button>
+          <button class="term-btn" onclick="clearTerminalLogs()">Clear Log</button>
+        </div>
+      </div>
+      <div class="terminal-body" id="terminal-body">
+        <!-- Populated by app.js -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer-bar">
+    <div>
+      TRINETRA System Testbed • Independent simulation console isolated from clinical hospital network.
+    </div>
+    <div>
+      Backend Service: <a href="http://localhost:8000" target="_blank">http://localhost:8000</a> | Hospital Command: <a href="http://localhost:3000" target="_blank">http://localhost:3000</a>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

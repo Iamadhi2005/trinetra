@@ -13,7 +13,7 @@
 
 *An enterprise-grade, multi-tiered AI defense platform designed to protect life-critical healthcare infrastructure, smart ICUs, and connected medical devices against adversarial cyberattacks.*
 
-[Live Web Dashboard](http://localhost:3000) • [Pure ML Attacker Hub](http://localhost:3000/attacker-pure-ml) • [API Documentation](http://localhost:8000/docs) • [Technical Whitepaper](PROJECT_DOCUMENTATION.md)
+[Hospital Dashboard](http://localhost:3000) • [Security Simulation Testbed](http://localhost:3002) • [AI & IDS Console](http://localhost:3001) • [API Documentation](http://localhost:8000/docs) • [Technical Whitepaper](PROJECT_DOCUMENTATION.md)
 
 </div>
 
@@ -335,11 +335,12 @@ npm run dev -- -p 3000
 ```
 
 ### 5. Access the Web Applications
-- **ICU Main Dashboard**: [http://localhost:3000](http://localhost:3000)
-- **Pure ML Attacker Hub**: [http://localhost:3000/attacker-pure-ml](http://localhost:3000/attacker-pure-ml)
-- **Demo Attacker Hub**: [http://localhost:3000/attacker](http://localhost:3000/attacker)
+- **Hospital ICU Dashboard**: [http://localhost:3000](http://localhost:3000)
+- **Security Simulation Testbed (Standalone Console)**: [http://localhost:3002](http://localhost:3002)
+- **AI & IDS Model Performance Console**: [http://localhost:3001](http://localhost:3001)
 - **Patient Bedside Monitor**: [http://localhost:3000/patients/patient_101](http://localhost:3000/patients/patient_101)
 - **FastAPI Interactive Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Expo Mobile Bundler (Metro)**: `http://localhost:8081`
 
 **Default Login Credentials**:
 - **Username**: `admin`

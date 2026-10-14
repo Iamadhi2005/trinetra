@@ -106,8 +106,9 @@ class VitalAnomalyDetector:
 class CUSUMDriftDetector:
     """
     Cumulative Sum (CUSUM) detector to identify slow vital drift (stealth poisoning).
+    Includes a decay factor and baseline deadband to eliminate false positives from stationary physiological noise.
     """
-    def __init__(self, threshold=5.0, drift=0.5):
+    def __init__(self, threshold=12.0, drift=0.8):
         self.threshold = threshold
         self.drift = drift
         self.g_pos = 0.0
@@ -120,17 +121,22 @@ class CUSUMDriftDetector:
     def update(self, val, mean, std):
         """
         Updates CUSUM statistics with a new standardized value.
-        Returns: True if drift is detected, False otherwise.
+        Returns: True if genuine drift is detected, False otherwise.
         """
         if std == 0:
             std = 1.0
         z = (val - mean) / std
         
-        # Calculate positive and negative cumulative sums
-        self.g_pos = max(0.0, self.g_pos + z - self.drift)
-        self.g_neg = max(0.0, self.g_neg - z - self.drift)
+        # Deadband: if within 1.5 standard deviations of baseline, decay accumulated drift
+        if abs(z) < 1.5:
+            self.g_pos = max(0.0, self.g_pos * 0.90)
+            self.g_neg = max(0.0, self.g_neg * 0.90)
+        else:
+            self.g_pos = max(0.0, (self.g_pos * 0.95) + z - self.drift)
+            self.g_neg = max(0.0, (self.g_neg * 0.95) - z - self.drift)
         
         if self.g_pos > self.threshold or self.g_neg > self.threshold:
             self.reset()
             return True
         return False
+

@@ -27,22 +27,75 @@ def get_quarantine_queue(current_user = Depends(get_current_user)):
         })
     return items
 
+@router.post("/isolate")
+def isolate_machine(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    device_id = payload.get("device_id", "")
+    patient_id = payload.get("patient_id", "")
+    
+    # 1. Hard block in IDS engine
+    if device_id:
+        global_simulator_service.ids.action_hard_block(device_id)
+        global_simulator_service.ids.blocked_clients.add(f"client_{device_id}")
+    
+    # 2. Update Device in DB to Isolated status
+    if device_id:
+        dev = db.query(Device).filter(Device.id == device_id).first()
+        if dev:
+            dev.status = "Isolated"
+        
+    # 3. Resolve active alert for this device/patient
+    active_alerts = db.query(Alert).filter(Alert.status == "Unresolved")
+    if device_id or patient_id:
+        active_alerts = active_alerts.filter((Alert.device_id == device_id) | (Alert.patient_id == patient_id))
+    for a in active_alerts.all():
+        a.status = "Resolved"
+        a.resolution_notes = f"Device {device_id} isolated by operator via One-Click IPS switch."
+        
+    # 4. Neutralize active attack if targeting this device/patient
+    current_mode, target_pat = global_simulator_service.get_attack_state()
+    if target_pat and (target_pat == patient_id or not patient_id):
+        global_simulator_service.trigger_attack_now("Normal", "")
+        
+    audit = AuditLog(
+        username="SOC-Operator",
+        action="DEVICE_ISOLATED",
+        target=device_id or patient_id or "Medical Device",
+        severity="Critical",
+        result="Success"
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Device {device_id} successfully isolated and blocked from clinical network.",
+        "device_id": device_id,
+        "device_status": "Isolated"
+    }
+
 @router.post("/quarantine/action")
 def quarantine_action(
-    device_id: str = Body(...),
-    action: str = Body(...), # override, hard_block, reset
-    db: Session = Depends(get_db),
-    current_user = Depends(require_role(["Admin", "Doctor", "Nurse"]))
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
 ):
+    device_id = payload.get("device_id", "")
+    action = payload.get("action", "hard_block") # override, hard_block, reset
+    
     if action == "override":
         global_simulator_service.ids.action_override(device_id)
     elif action == "hard_block":
         global_simulator_service.ids.action_hard_block(device_id)
+        dev = db.query(Device).filter(Device.id == device_id).first()
+        if dev:
+            dev.status = "Isolated"
     elif action == "reset":
         global_simulator_service.ids.action_reset(device_id)
         
     audit = AuditLog(
-        username=current_user.username,
+        username="SOC-Operator",
         action=f"QUARANTINE_{action.upper()}",
         target=device_id,
         severity="Warning" if action == "override" else "Critical",
