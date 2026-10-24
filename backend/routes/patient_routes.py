@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db, SessionLocal
 from backend.models import Patient, Device, AuditLog
 from backend.schemas import PatientResponse, PatientCreate
-from backend.auth import get_current_user, require_role
+from backend.auth import get_current_user, get_optional_current_user, require_role
 from backend.simulator_service import global_simulator_service
 import os
 import shutil
@@ -154,7 +154,7 @@ def run_calibration_task(patient_id: str, db_session_factory, instant: bool = Fa
         db.close()
 
 @router.get("", response_model=List[PatientResponse])
-def list_patients(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+def list_patients(db: Session = Depends(get_db), current_user = Depends(get_optional_current_user)):
     return db.query(Patient).all()
 
 @router.post("", response_model=PatientResponse)

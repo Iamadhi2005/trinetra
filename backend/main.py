@@ -7,6 +7,7 @@ import uvicorn
 import math
 import time
 import random
+from typing import Optional, List, Dict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database import Base, engine, SessionLocal
@@ -26,6 +27,8 @@ from backend.routes.report_routes import router as report_router
 from backend.routes.log_routes import router as log_router
 from backend.routes.ips_routes import router as ips_router
 from backend.routes.adversary_routes import router as adversary_router
+from backend.routes.admin_routes import router as admin_router
+from backend.routes.notification_routes import router as notification_router
 from backend.simulator_service import global_simulator_service
 
 # Create database tables
@@ -59,20 +62,70 @@ app.include_router(report_router)
 app.include_router(log_router)
 app.include_router(ips_router)
 app.include_router(adversary_router)
+app.include_router(admin_router)
+app.include_router(notification_router)
 
 def seed_initial_data():
+    import sqlite3
+    db_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "trinetra.db")
+    if os.path.exists(db_file):
+        raw_conn = sqlite3.connect(db_file)
+        cur = raw_conn.cursor()
+        cols = [r[1] for r in cur.execute("PRAGMA table_info(users)").fetchall()]
+        if "department" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN department TEXT DEFAULT 'General'")
+        if "assigned_patient_id" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN assigned_patient_id TEXT DEFAULT NULL")
+        if "is_active" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
+        if "must_change_password" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0")
+        raw_conn.commit()
+        raw_conn.close()
+
     db = SessionLocal()
     try:
         # Seed initial users if empty
-        if db.query(User).filter(User.username == "techiebatman77").count() == 0:
-            db.add(User(username="techiebatman77", password_hash=get_password_hash("admin123"), name="Techie Batman (SOC Admin)", role="Admin"))
+        if db.query(User).filter(User.username == "admin").count() == 0:
+            db.add(User(username="admin", password_hash=get_password_hash("admin123"), name="Chief SOC Admin / Medical Director", role="Admin", department="Hospital Security Administration", is_active=True, must_change_password=False))
             db.commit()
 
-        if db.query(User).count() <= 1:
-            db.add(User(username="admin", password_hash=get_password_hash("admin123"), name="Chief SOC Admin", role="Admin"))
-            db.add(User(username="doctor", password_hash=get_password_hash("doctor123"), name="Dr. Sarah Connor", role="Doctor"))
-            db.add(User(username="nurse", password_hash=get_password_hash("nurse123"), name="Nurse Joy", role="Nurse"))
-            db.commit()
+        # Ensure doctors exist
+        doc_seeds = [
+            ("dr.connor", "Dr. Sarah Connor", "Cardiology & Intensive Care (ICU-A)"),
+            ("dr.radhi", "Dr. Radhi", "Critical Care & Tele-ICU (ICU-A)"),
+            ("dr.rocky", "Dr. Rocky", "Emergency Medicine & Trauma (ICU-A)"),
+            ("dr.arjun", "Dr. Arjun", "Cardiothoracic Surgery Subnet (ICU-C)"),
+        ]
+        for u, name, dept in doc_seeds:
+            if db.query(User).filter(User.username == u).count() == 0:
+                db.add(User(username=u, password_hash=get_password_hash("DoctorInit2026!"), name=name, role="Doctor", department=dept, is_active=True, must_change_password=True))
+        db.commit()
+
+        # Ensure tech team exists
+        tech_seeds = [
+            ("tech.batman", "Techie Batman (Lead SOC Analyst)", "IoMT SOC Team"),
+            ("tech.netsec", "Alex Vance (Network Specialist)", "IoMT SOC Team"),
+            ("tech.deviceops", "David Kim (Firmware Engineer)", "Biomedical Engineering"),
+        ]
+        for u, name, dept in tech_seeds:
+            if db.query(User).filter(User.username == u).count() == 0:
+                db.add(User(username=u, password_hash=get_password_hash("TechSec2026!"), name=name, role="Tech", department=dept, is_active=True, must_change_password=False))
+        db.commit()
+
+        # Ensure patient accounts exist
+        pt_seeds = [
+            ("pt.smith", "Robert Smith", "patient_102"),
+            ("pt.babu", "Babu", "PAT-6665"),
+            ("pt.raju", "Raju", "PAT-7850"),
+            ("pt.anirudh", "Anirudh", "PAT-3851"),
+            ("pt.jeeva", "Jeeva", "PAT-4008"),
+            ("pt.johndoe", "John Doe", "patient_101"),
+        ]
+        for u, name, pid in pt_seeds:
+            if db.query(User).filter(User.username == u).count() == 0:
+                db.add(User(username=u, password_hash=get_password_hash("PatientCare2026!"), name=name, role="Patient", department="Admitted Inpatient Care", assigned_patient_id=pid, is_active=True, must_change_password=False))
+        db.commit()
             
         # Seed patients if empty
         if db.query(Patient).count() == 0:
@@ -279,9 +332,18 @@ async def websocket_telemetry(websocket: WebSocket, patient_id: str):
         pass
 
 from backend.mqtt_service import start_mqtt_listener
+from backend.routes.notification_routes import register_main_loop, websocket_alerts_endpoint
+
+@app.websocket("/ws/alerts")
+async def root_websocket_alerts(websocket: WebSocket, token: Optional[str] = None, role: Optional[str] = None, user_id: Optional[str] = None):
+    await websocket_alerts_endpoint(websocket, token=token, role=role, user_id=user_id)
 
 @app.on_event("startup")
 async def on_startup():
+    try:
+        register_main_loop(asyncio.get_running_loop())
+    except Exception:
+        pass
     asyncio.create_task(simulator_background_loop())
     start_mqtt_listener()
 

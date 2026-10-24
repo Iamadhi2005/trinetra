@@ -8,9 +8,16 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="Nurse") # Admin, Doctor, Nurse, Operator, Viewer
+    role = Column(String, default="Nurse") # Admin, Doctor, Patient, Tech, Nurse, Operator, Viewer
     name = Column(String, nullable=False)
+    department = Column(String, default="General") # Cardiology, Critical Care, IoMT Security, etc.
+    assigned_patient_id = Column(String, nullable=True) # Linked patient ID if role is Patient or Doctor
+    is_active = Column(Boolean, default=True)
+    must_change_password = Column(Boolean, default=False) # Enforced first-login password change
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    device_registrations = relationship("DeviceRegistration", back_populates="user", cascade="all, delete-orphan")
+    notification_logs = relationship("NotificationLog", back_populates="user", cascade="all, delete-orphan")
 
 class Patient(Base):
     __tablename__ = "patients"
@@ -141,3 +148,33 @@ class Report(Base):
     file_path = Column(String, nullable=False)
     report_type = Column(String, default="Security Audit")
     kpis = Column(Text, default="{}")
+
+class DeviceRegistration(Base):
+    __tablename__ = "device_registrations"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    device_id = Column(String, index=True, nullable=False) # client UUID / device fingerprint
+    fcm_token = Column(String, nullable=True)
+    device_name = Column(String, default="Android Device")
+    platform = Column(String, default="android")
+    is_active = Column(Boolean, default=True)
+    last_registered = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User", back_populates="device_registrations")
+
+class NotificationLog(Base):
+    __tablename__ = "notification_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    alert_id = Column(Integer, ForeignKey("alerts.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    payload = Column(Text, default="{}") # JSON clinical/technical event payload
+    delivery_status = Column(String, default="Sent") # Sent, Delivered, Acknowledged, Failed
+    channel = Column(String, default="FCM") # FCM, InApp, AudibleChannel
+    attempt_count = Column(Integer, default=1)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    acknowledged_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="notification_logs")
+    alert = relationship("Alert")

@@ -70,14 +70,28 @@ def on_message(client, userdata, msg):
                     Alert.status == "Unresolved"
                 ).first()
                 if not active_alert:
-                    db.add(Alert(
+                    new_mqtt_alert = Alert(
                         device_id=device_id,
                         patient_id=patient_id,
                         severity="Critical",
                         message=res.get("alert", f"Anomaly detected on hardware node {device_id}"),
                         status="Unresolved"
-                    ))
-                db.commit()
+                    )
+                    db.add(new_mqtt_alert)
+                    db.commit()
+                    db.refresh(new_mqtt_alert)
+                    # Push notification to authorized users
+                    try:
+                        from backend.routes.notification_routes import route_security_alert_to_accounts
+                        route_security_alert_to_accounts(
+                            db, new_mqtt_alert,
+                            attack_type="MQTT Hardware Anomaly",
+                            clinical_payload={"source_ip": client_id}
+                        )
+                    except Exception:
+                        pass
+                else:
+                    db.commit()
                 
                 # 3. Publish Automated IPS Actuator Override back to ESP32
                 actuator_topic = f"{MQTT_ACTUATOR_TOPIC_PREFIX}/{patient_id}/{device_id}/control"

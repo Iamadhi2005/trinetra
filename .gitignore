@@ -30,3 +30,11 @@ frontend/.env.local
 .idea/
 .DS_Store
 Thumbs.db
+
+# Binaries & Builds
+*.apk
+*.idsig
+*.db
+backend/trinetra.db
+trinetra_flutter/build/
+trinetra_flutter/.dart_tool/

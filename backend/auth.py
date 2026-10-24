@@ -14,6 +14,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 24 hours
 PASSWORD_SALT = "trinetra_salt_2026"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 def get_password_hash(password: str) -> str:
     return hashlib.sha256((password + PASSWORD_SALT).encode('utf-8')).hexdigest()
@@ -48,6 +49,21 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+def get_optional_current_user(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+        return db.query(User).filter(User.username == username).first()
+    except Exception:
+        return None
 
 def require_role(allowed_roles: list):
     def role_checker(current_user: User = Depends(get_current_user)):

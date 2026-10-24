@@ -192,6 +192,11 @@ class SimulatorService:
                 )
                 db.add(audit)
                 db.commit()
+                try:
+                    from backend.routes.notification_routes import broadcast_system_attack_event
+                    broadcast_system_attack_event("Normal", "", is_active=False)
+                except Exception:
+                    pass
             else:
                 for p_id in self.simulator.patients:
                     if p_id == target_patient:
@@ -199,6 +204,12 @@ class SimulatorService:
                     else:
                         self.simulator.set_attack_mode(p_id, "Normal", ips_disabled=False)
                 db.commit()
+                try:
+                    from backend.routes.notification_routes import broadcast_system_attack_event
+                    info = self.get_attack_details(attack_mode, target_patient)
+                    broadcast_system_attack_event(attack_mode, target_patient, info, is_active=True)
+                except Exception:
+                    pass
         except Exception as e:
             db.rollback()
         finally:
@@ -357,6 +368,11 @@ class SimulatorService:
                     "timestamp": time.time()
                 }
                 self.simulator.reset_all_to_normal()
+                try:
+                    from backend.routes.notification_routes import broadcast_system_attack_event
+                    broadcast_system_attack_event("Normal", "", is_active=False)
+                except Exception:
+                    pass
                 return state_data
 
             # Active attack: resolve details
@@ -392,6 +408,7 @@ class SimulatorService:
                 recent_alert.severity = info["severity"]
                 recent_alert.message = info["alert_message"]
                 recent_alert.timestamp = datetime.datetime.utcnow()
+                target_alert = recent_alert
             else:
                 new_alert = Alert(
                     device_id=dev_id,
@@ -401,7 +418,15 @@ class SimulatorService:
                     status="Unresolved"
                 )
                 db.add(new_alert)
+                target_alert = new_alert
 
+            db.commit()
+            db.refresh(target_alert)
+            try:
+                from backend.routes.notification_routes import route_security_alert_to_accounts
+                route_security_alert_to_accounts(db, target_alert, attack_type=info["attack_label"])
+            except Exception as ex:
+                print("Error routing alert notification:", ex)
 
             sec_evt = SecurityEvent(
                 device_id=dev_id,
@@ -423,6 +448,13 @@ class SimulatorService:
             )
             db.add(audit)
             db.commit()
+
+            # Real-time authoritative cyberattack alert broadcast to all active mobile & web consoles
+            try:
+                from backend.routes.notification_routes import broadcast_system_attack_event
+                broadcast_system_attack_event(attack_mode, target_patient, info, is_active=True)
+            except Exception:
+                pass
 
             # Apply attack to patient simulator with ips_disabled=True so anomaly manifests
             for p_id in self.simulator.patients:
@@ -538,14 +570,21 @@ class SimulatorService:
                     Alert.status == "Unresolved"
                 ).first()
                 if not active_alert:
-                    db.add(Alert(
+                    new_alt = Alert(
                         device_id=dev_id,
                         patient_id=target_patient if target_patient else None,
                         severity=info["severity"],
                         message=info["alert_message"],
                         status="Unresolved"
-                    ))
+                    )
+                    db.add(new_alt)
                     db.commit()
+                    db.refresh(new_alt)
+                    try:
+                        from backend.routes.notification_routes import route_security_alert_to_accounts
+                        route_security_alert_to_accounts(db, new_alt, attack_type=info["attack_label"])
+                    except Exception as ex:
+                        print("Error routing alert notification:", ex)
                 else:
                     active_alert.message = info["alert_message"]
                     active_alert.severity = info["severity"]

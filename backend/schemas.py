@@ -7,9 +7,67 @@ class UserBase(BaseModel):
     username: str
     name: str
     role: str
+    department: Optional[str] = "General"
+    assigned_patient_id: Optional[str] = None
+    is_active: Optional[bool] = True
+    must_change_password: Optional[bool] = False
 
 class UserCreate(UserBase):
     password: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    department: Optional[str] = None
+    assigned_patient_id: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+class AdminPasswordReset(BaseModel):
+    user_id: int
+    new_temporary_password: Optional[str] = None
+
+class AssignDoctorRequest(BaseModel):
+    patient_id: str
+    doctor_name: str
+
+class DeviceRegistrationRequest(BaseModel):
+    device_id: str
+    fcm_token: Optional[str] = None
+    device_name: Optional[str] = "Android Device"
+    platform: Optional[str] = "android"
+
+class DeviceRegistrationResponse(BaseModel):
+    id: int
+    user_id: int
+    device_id: str
+    fcm_token: Optional[str] = None
+    device_name: str
+    platform: str
+    is_active: bool
+    last_registered: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
+class NotificationLogResponse(BaseModel):
+    id: int
+    alert_id: Optional[int] = None
+    user_id: int
+    title: str
+    body: str
+    payload: str
+    delivery_status: str
+    channel: str
+    attempt_count: int
+    created_at: datetime.datetime
+    acknowledged_at: Optional[datetime.datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class UserResponse(UserBase):
     id: int
@@ -22,6 +80,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    must_change_password: bool = False
 
 class LoginRequest(BaseModel):
     username: str
