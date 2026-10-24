@@ -17,7 +17,7 @@ enum GatewayStatus {
 }
 
 class ConnectionProvider extends ChangeNotifier {
-  String _serverUrl = ApiEndpoints.defaultTailscaleUrl;
+  String _serverUrl = ApiEndpoints.defaultProductionCloudUrl;
   GatewayStatus _status = GatewayStatus.connecting;
   bool _isTesting = false;
   int _latencyMs = 0;

@@ -106,9 +106,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 runSpacing: 6,
                 children: [
                   ActionChip(
-                    label: const Text("🚀 Tailscale (100.86.143.62:8000)", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                    avatar: const Icon(Icons.cloud_done, size: 14, color: AppColors.primary),
+                    label: const Text("☁️ Render Cloud (24/7 Live)", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                     backgroundColor: AppColors.primaryDim,
                     side: const BorderSide(color: AppColors.primary),
+                    onPressed: () => controller.text = ApiEndpoints.defaultProductionCloudUrl,
+                  ),
+                  ActionChip(
+                    label: const Text("🚀 Tailscale Mesh", style: TextStyle(fontSize: 10)),
+                    backgroundColor: AppColors.surfaceElevated,
+                    side: const BorderSide(color: AppColors.borderSubtle),
                     onPressed: () => controller.text = ApiEndpoints.defaultTailscaleUrl,
                   ),
                   ActionChip(
@@ -122,12 +129,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     backgroundColor: AppColors.surfaceElevated,
                     side: const BorderSide(color: AppColors.borderSubtle),
                     onPressed: () => controller.text = ApiEndpoints.defaultCloudTunnelUrl,
-                  ),
-                  ActionChip(
-                    label: const Text("Emulator (10.0.2.2:8000)", style: TextStyle(fontSize: 10)),
-                    backgroundColor: AppColors.surfaceElevated,
-                    side: const BorderSide(color: AppColors.borderSubtle),
-                    onPressed: () => controller.text = ApiEndpoints.defaultEmulatorUrl,
                   ),
                 ],
               ),
@@ -250,8 +251,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   runSpacing: 6,
                   children: [
                     ChoiceChip(
+                      avatar: const Icon(Icons.cloud_done, size: 14, color: AppColors.primary),
+                      label: const Text("☁️ Cloud (24/7 Live)", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                      selected: conn.serverUrl.contains("onrender.com"),
+                      selectedColor: AppColors.primaryDim,
+                      backgroundColor: AppColors.surfaceElevated,
+                      side: BorderSide(
+                        color: conn.serverUrl.contains("onrender.com") ? AppColors.primary : AppColors.borderSubtle,
+                      ),
+                      onSelected: (_) => conn.setServerUrl(ApiEndpoints.defaultProductionCloudUrl),
+                    ),
+                    ChoiceChip(
                       avatar: const Icon(Icons.bolt, size: 14, color: AppColors.primary),
-                      label: const Text("Tailscale (0 Drops)", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                      label: const Text("Tailscale", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                       selected: conn.serverUrl.contains("100.86."),
                       selectedColor: AppColors.primaryDim,
                       backgroundColor: AppColors.surfaceElevated,
@@ -269,16 +281,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: (conn.serverUrl.contains("192.168.") || conn.serverUrl.contains("10.244.")) ? AppColors.primary : AppColors.borderSubtle,
                       ),
                       onSelected: (_) => conn.setServerUrl(ApiEndpoints.defaultLocalWifiUrl),
-                    ),
-                    ChoiceChip(
-                      label: const Text("🌐 5G / Tunnel", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                      selected: conn.serverUrl.contains("loca.lt"),
-                      selectedColor: AppColors.primaryDim,
-                      backgroundColor: AppColors.surfaceElevated,
-                      side: BorderSide(
-                        color: conn.serverUrl.contains("loca.lt") ? AppColors.primary : AppColors.borderSubtle,
-                      ),
-                      onSelected: (_) => conn.setServerUrl(ApiEndpoints.defaultCloudTunnelUrl),
                     ),
                   ],
                 ),

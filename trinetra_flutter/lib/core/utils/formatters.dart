@@ -38,7 +38,7 @@ class Formatters {
     }).join(' ');
   }
 
-  static String sanitizeUrl(String? url, {String defaultUrl = "http://100.86.143.62:8000"}) {
+  static String sanitizeUrl(String? url, {String defaultUrl = "https://trinetra-ya1h.onrender.com"}) {
     if (url == null || url.trim().isEmpty) return defaultUrl;
     String clean = url.trim();
     if (clean.contains(".loca.lt:8000")) {

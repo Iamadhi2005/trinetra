@@ -1,5 +1,6 @@
 class ApiEndpoints {
   // Preset Gateway URLs
+  static const String defaultProductionCloudUrl = "https://trinetra-ya1h.onrender.com";
   static const String defaultTailscaleUrl = "http://100.86.143.62:8000";
   static const String defaultLocalWifiUrl = "http://192.168.1.165:8000";
   static const String defaultCloudTunnelUrl = "https://fresh-quail-93.loca.lt";
@@ -7,6 +8,7 @@ class ApiEndpoints {
 
   // Candidate gateway endpoints for automatic discovery & multi-network resolution
   static const List<String> candidateGatewayUrls = [
+    defaultProductionCloudUrl,
     defaultTailscaleUrl,
     defaultLocalWifiUrl,
     defaultCloudTunnelUrl,

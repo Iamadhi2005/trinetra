@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://trinetra-ya1h.onrender.com/api";
 
 export function getAuthToken(): string | null {
   if (typeof window !== "undefined") {
