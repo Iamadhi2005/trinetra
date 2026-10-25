@@ -62,7 +62,7 @@ goto menu
 :attack1
 echo.
 echo Launching [1] Pacemaker ^& Infusion Override on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -Headers @{'Content-Type'='application/json'} -Body '{\"attack_mode\": \"Override\", \"target_patient\": \"patient_102\"}' | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -ContentType 'application/json' -Body (@{attack_mode='Override'; target_patient='patient_102'} | ConvertTo-Json) | Format-List message"
 echo.
 pause
 goto menu
@@ -70,7 +70,7 @@ goto menu
 :attack2
 echo.
 echo Launching [2] Battery Depletion Exploit on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -Headers @{'Content-Type'='application/json'} -Body '{\"attack_mode\": \"Drain\", \"target_patient\": \"patient_102\"}' | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -ContentType 'application/json' -Body (@{attack_mode='Drain'; target_patient='patient_102'} | ConvertTo-Json) | Format-List message"
 echo.
 pause
 goto menu
@@ -78,7 +78,7 @@ goto menu
 :attack3
 echo.
 echo Launching [3] Sensor Detachment Fault on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -Headers @{'Content-Type'='application/json'} -Body '{\"attack_mode\": \"Fault\", \"target_patient\": \"patient_102\"}' | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -ContentType 'application/json' -Body (@{attack_mode='Fault'; target_patient='patient_102'} | ConvertTo-Json) | Format-List message"
 echo.
 pause
 goto menu
@@ -86,7 +86,7 @@ goto menu
 :attack4
 echo.
 echo Launching [4] DoS Volumetric Packet Flood on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -Headers @{'Content-Type'='application/json'} -Body '{\"attack_mode\": \"DoS\", \"target_patient\": \"patient_102\"}' | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -ContentType 'application/json' -Body (@{attack_mode='DoS'; target_patient='patient_102'} | ConvertTo-Json) | Format-List message"
 echo.
 pause
 goto menu
@@ -94,7 +94,7 @@ goto menu
 :attack5
 echo.
 echo Launching [5] Telemetry Spoofing / MitM on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -Headers @{'Content-Type'='application/json'} -Body '{\"attack_mode\": \"MitM\", \"target_patient\": \"patient_102\"}' | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -ContentType 'application/json' -Body (@{attack_mode='MitM'; target_patient='patient_102'} | ConvertTo-Json) | Format-List message"
 echo.
 pause
 goto menu
@@ -102,7 +102,7 @@ goto menu
 :attack6
 echo.
 echo Launching [6] Replay / Stale Data Injection on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -Headers @{'Content-Type'='application/json'} -Body '{\"attack_mode\": \"Replay\", \"target_patient\": \"patient_102\"}' | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -ContentType 'application/json' -Body (@{attack_mode='Replay'; target_patient='patient_102'} | ConvertTo-Json) | Format-List message"
 echo.
 pause
 goto menu
@@ -110,7 +110,7 @@ goto menu
 :attack7
 echo.
 echo Launching [7] Brute-Force Auth Attack on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -Headers @{'Content-Type'='application/json'} -Body '{\"attack_mode\": \"BruteForce\", \"target_patient\": \"patient_102\"}' | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/attack' -Method POST -ContentType 'application/json' -Body (@{attack_mode='BruteForce'; target_patient='patient_102'} | ConvertTo-Json) | Format-List message"
 echo.
 pause
 goto menu
@@ -118,7 +118,7 @@ goto menu
 :disengage
 echo.
 echo Disengaging all attacks on %GATEWAY_URL%...
-powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/disengage' -Method POST | Format-List message"
+powershell -Command "Invoke-RestMethod -Uri '%GATEWAY_URL%/api/security/disengage' -Method POST -ContentType 'application/json' -Body '{}' | Format-List message"
 echo.
 pause
 goto menu
