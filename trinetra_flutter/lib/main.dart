@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
 import 'data/services/notification_service.dart';
+import 'data/services/power_service.dart';
 import 'data/services/storage_service.dart';
 import 'providers/alerts_provider.dart';
 import 'providers/auth_provider.dart';
@@ -26,9 +27,10 @@ void main() async {
     ),
   );
 
-  // Initialize persistent storage and notification channels
+  // Initialize persistent storage, power wake lock, and notification channels
   await StorageService.init();
   await NotificationService.init();
+  await PowerService.init();
 
   runApp(const TrinetraApp());
 }

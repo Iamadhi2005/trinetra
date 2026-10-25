@@ -12,8 +12,7 @@ class AlertsProvider extends ChangeNotifier {
   bool _isLoading = false;
   String _activeFilter = 'ALL';
   int? _resolvingId;
-  final Set<int> _notifiedAlertIds = {};
-  bool _isInitialLoadDone = false;
+  final Set<String> _notifiedAlertKeys = {};
   bool _isInitialized = false;
   Timer? _backgroundSyncTimer;
   String _lastNotifiedAttackKey = "";
@@ -81,7 +80,7 @@ class AlertsProvider extends ChangeNotifier {
         final targetPatient = attackState.targetPatient;
 
         if (attackMode != 'Normal') {
-          final attackKey = '${attackMode}_$targetPatient';
+          final attackKey = '${attackMode}_${targetPatient}_${attackState.timestamp}';
           if (_lastNotifiedAttackKey != attackKey) {
             _lastNotifiedAttackKey = attackKey;
             handleActiveAttack(
@@ -99,28 +98,22 @@ class AlertsProvider extends ChangeNotifier {
 
         // 2. Fetch recent alerts list
         final freshAlerts = await ApiService.getAlerts();
-        if (!_isInitialLoadDone) {
-          _isInitialLoadDone = true;
-          for (final a in freshAlerts) {
-            _notifiedAlertIds.add(a.id);
-          }
-        } else {
-          for (final alert in freshAlerts) {
-            if (!alert.isResolved && !_notifiedAlertIds.contains(alert.id)) {
-              _notifiedAlertIds.add(alert.id);
-              AlarmSoundService.playEmergencyBeep();
-              showInAppBanner(
-                "🚨 ${alert.severity.toUpperCase()} ALERT: ${alert.patientName}",
-                "${alert.message} (${alert.deviceName})",
-                severity: alert.severity,
-              );
-              NotificationService.showSystemAlert(
-                id: alert.id,
-                title: "🚨 ${alert.severity.toUpperCase()} ALERT: ${alert.patientName}",
-                body: "${alert.message} (${alert.deviceName})",
-                severity: alert.severity,
-              );
-            }
+        for (final alert in freshAlerts) {
+          final alertKey = '${alert.id}_${alert.timestamp}_${alert.message}';
+          if (!alert.isResolved && !_notifiedAlertKeys.contains(alertKey)) {
+            _notifiedAlertKeys.add(alertKey);
+            AlarmSoundService.playEmergencyBeep();
+            showInAppBanner(
+              "🚨 ${alert.severity.toUpperCase()} ALERT: ${alert.patientName}",
+              "${alert.message} (${alert.deviceName})",
+              severity: alert.severity,
+            );
+            NotificationService.showSystemAlert(
+              id: alert.id,
+              title: "🚨 ${alert.severity.toUpperCase()} ALERT: ${alert.patientName}",
+              body: "${alert.message} (${alert.deviceName})",
+              severity: alert.severity,
+            );
           }
         }
         _alerts = freshAlerts;
@@ -145,7 +138,8 @@ class AlertsProvider extends ChangeNotifier {
         final severity = data['severity']?.toString() ?? 'Critical';
         final alertId = data['alert_id'] is num ? (data['alert_id'] as num).toInt() : (DateTime.now().millisecondsSinceEpoch % 100000);
 
-        _notifiedAlertIds.add(alertId);
+        final alertKey = '${alertId}_${data['timestamp']}_$message';
+        _notifiedAlertKeys.add(alertKey);
 
         // 1. Play Emergency Beep
         AlarmSoundService.playEmergencyBeep();
@@ -205,12 +199,6 @@ class AlertsProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _alerts = await ApiService.getAlerts();
-      if (!_isInitialLoadDone) {
-        _isInitialLoadDone = true;
-        for (final a in _alerts) {
-          _notifiedAlertIds.add(a.id);
-        }
-      }
     } catch (_) {} finally {
       _isLoading = false;
       notifyListeners();
@@ -222,6 +210,7 @@ class AlertsProvider extends ChangeNotifier {
     notifyListeners();
     try {
       await ApiService.resolveAlert(alertId, notes: notes);
+      _notifiedAlertKeys.removeWhere((k) => k.startsWith('${alertId}_'));
       await loadAlerts();
     } catch (_) {} finally {
       _resolvingId = null;

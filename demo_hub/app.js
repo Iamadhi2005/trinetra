@@ -4,9 +4,31 @@
  * Communicates with TRINETRA API Gateway at http://localhost:8000
  */
 
-const BACKEND_URL = "http://localhost:8000";
-const API_BASE = `${BACKEND_URL}/api`;
-const WS_BASE = BACKEND_URL.replace(/^http/, "ws");
+const DEFAULT_URL = "https://trinetra-ya1h.onrender.com";
+let BACKEND_URL = (typeof localStorage !== "undefined" && localStorage.getItem("trinetra_testbed_backend")) || DEFAULT_URL;
+let API_BASE = `${BACKEND_URL}/api`;
+let WS_BASE = BACKEND_URL.replace(/^http/, "ws");
+
+function setBackendGateway(url) {
+  BACKEND_URL = url.replace(/\/+$/, "");
+  API_BASE = `${BACKEND_URL}/api`;
+  WS_BASE = BACKEND_URL.replace(/^http/, "ws");
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem("trinetra_testbed_backend", BACKEND_URL);
+  }
+  updateGatewayStatusUI();
+  logTerminal(`Switched active gateway to: ${BACKEND_URL}`, "sys");
+  loadPatients();
+  pollAttackState();
+  initTelemetryWebSocket(selectedTarget);
+}
+
+function updateGatewayStatusUI() {
+  const statusEl = document.getElementById("backend-status-text");
+  if (statusEl) {
+    statusEl.textContent = BACKEND_URL.includes("render.com") ? "☁️ Render Cloud" : "🏥 Local:8000";
+  }
+}
 
 // ── State ──────────────────────────────────────────────────
 let selectedTarget = "patient_102";
@@ -132,6 +154,7 @@ const IPS_RULES_DATA = [
 
 // ── Initialization ─────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
+  updateGatewayStatusUI();
   logTerminal("TRINETRA Security Testbed initialized.", "sys");
   logTerminal(`Connected to backend gateway at ${BACKEND_URL}. Ready for scenario execution.`, "sys");
   

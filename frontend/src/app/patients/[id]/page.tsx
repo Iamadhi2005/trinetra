@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { fetchApi } from "@/lib/api";
+import { fetchApi, getWsUrl } from "@/lib/api";
 import {
   Play,
   RotateCcw,
@@ -164,8 +164,7 @@ export default function PatientConsolePage(props: { params?: Promise<{ id: strin
 
     const connectWs = () => {
       try {
-        const host = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "127.0.0.1";
-        ws = new WebSocket(`ws://${host}:8000/ws/telemetry/${patientId}`);
+        ws = new WebSocket(getWsUrl(`/ws/telemetry/${patientId}`));
         ws.onmessage = (event) => {
           lastWsMessageTime = Date.now();
           const data: TelemetryPoint = JSON.parse(event.data);

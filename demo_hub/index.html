@@ -29,10 +29,14 @@
       </div>
 
       <div class="header-actions">
-        <!-- Backend Gateway Status -->
-        <div class="status-indicator" id="backend-status">
-          <span class="status-dot"></span>
-          <span id="backend-status-text">Backend Connected: 8000</span>
+        <!-- Backend Gateway Status & Toggle -->
+        <div class="gateway-switch-wrap" style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); padding: 4px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12);">
+          <div class="status-indicator" id="backend-status" style="margin: 0; padding: 0; background: none; border: none;">
+            <span class="status-dot"></span>
+            <span id="backend-status-text" style="font-size: 11px; font-weight: 600;">☁️ Render Cloud</span>
+          </div>
+          <button type="button" onclick="setBackendGateway('https://trinetra-ya1h.onrender.com')" style="padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 600; cursor: pointer; border: 1px solid #38bdf8; background: #0284c7; color: #fff;">☁️ Cloud</button>
+          <button type="button" onclick="setBackendGateway('http://localhost:8000')" style="padding: 2px 7px; border-radius: 5px; font-size: 10px; font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: #cbd5e1;">🏥 Local:8000</button>
         </div>
 
         <!-- Simulated Patient Unit -->

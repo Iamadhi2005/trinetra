@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchApi } from "@/lib/api";
+import { fetchApi, getWsUrl } from "@/lib/api";
 import {
   Activity,
   Users,
@@ -133,7 +133,7 @@ export default function DashboardPage() {
     patients.forEach((p) => {
       if (!p.is_calibrated) return;
 
-      const ws = new WebSocket(`ws://localhost:8000/ws/telemetry/${p.id}`);
+      const ws = new WebSocket(getWsUrl(`/ws/telemetry/${p.id}`));
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);

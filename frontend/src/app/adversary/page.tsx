@@ -216,7 +216,7 @@ function isTokenExpired(token: string): boolean {
 
 export default function AdversaryConsolePage() {
   // ── Connection state ──────────────────────────────────────────────────────
-  const [backendUrl, setBackendUrl] = useState("http://localhost:8000");
+  const [backendUrl, setBackendUrl] = useState("https://trinetra-ya1h.onrender.com");
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("admin123");
   const [connState, setConnState] = useState<ConnState>("DISCONNECTED");
@@ -791,13 +791,39 @@ export default function AdversaryConsolePage() {
             {!isConnected ? (
               <div className="space-y-2">
                 <div>
-                  <label className="text-[10px] text-gray-500 block mb-1">Backend URL</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] text-gray-500">Backend Gateway</label>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setBackendUrl("https://trinetra-ya1h.onrender.com")}
+                        className={`text-[9px] px-1.5 py-0.5 rounded border ${
+                          backendUrl.includes("onrender.com")
+                            ? "bg-cyan-900/50 text-cyan-300 border-cyan-500"
+                            : "bg-[#161B22] text-gray-400 border-[#30363D]"
+                        }`}
+                      >
+                        ☁️ Cloud
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBackendUrl("http://localhost:8000")}
+                        className={`text-[9px] px-1.5 py-0.5 rounded border ${
+                          backendUrl.includes("localhost")
+                            ? "bg-cyan-900/50 text-cyan-300 border-cyan-500"
+                            : "bg-[#161B22] text-gray-400 border-[#30363D]"
+                        }`}
+                      >
+                        🏥 Local:8000
+                      </button>
+                    </div>
+                  </div>
                   <input
                     id="adv-backend-url"
                     type="text"
                     value={backendUrl}
                     onChange={(e) => setBackendUrl(e.target.value)}
-                    placeholder="http://localhost:8000"
+                    placeholder="https://trinetra-ya1h.onrender.com"
                     className="w-full bg-[#0D1117] border border-[#1E293B] rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-600 transition-colors"
                   />
                 </div>

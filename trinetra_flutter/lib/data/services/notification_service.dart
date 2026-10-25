@@ -7,9 +7,9 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  static const String channelCritical = "trinetra_critical_alarm";
-  static const String channelHigh = "trinetra_high_alarm";
-  static const String channelInfo = "trinetra_info";
+  static const String channelCritical = "trinetra_critical_alarm_v4";
+  static const String channelHigh = "trinetra_high_alarm_v4";
+  static const String channelInfo = "trinetra_info_v4";
 
   static bool _isInitialized = false;
 
@@ -146,6 +146,9 @@ class NotificationService {
       visibility: NotificationVisibility.public,
       category: AndroidNotificationCategory.alarm,
       audioAttributesUsage: AudioAttributesUsage.alarm,
+      ticker: title,
+      autoCancel: true,
+      channelShowBadge: true,
       styleInformation: BigTextStyleInformation(
         body,
         contentTitle: title,
@@ -155,12 +158,28 @@ class NotificationService {
 
     final notificationDetails = NotificationDetails(android: androidDetails);
 
-    await _notificationsPlugin.show(
-      id,
-      title,
-      body,
-      notificationDetails,
-      payload: payload,
-    );
+    try {
+      await _notificationsPlugin.show(
+        id,
+        title,
+        body,
+        notificationDetails,
+        payload: payload,
+      );
+    } catch (e) {
+      AppLogger.error("Failed to show custom sound notification, falling back to standard alarm", e);
+      // Fallback without custom raw sound in case of vendor restriction
+      const fallbackDetails = NotificationDetails(
+        android: AndroidNotificationDetails(
+          channelInfo,
+          "TRINETRA — Emergency Fallback",
+          importance: Importance.max,
+          priority: Priority.max,
+          enableVibration: true,
+          playSound: true,
+        ),
+      );
+      await _notificationsPlugin.show(id, title, body, fallbackDetails, payload: payload);
+    }
   }
 }

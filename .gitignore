@@ -39,3 +39,7 @@ Thumbs.db
 backend/trinetra.db
 trinetra_flutter/build/
 trinetra_flutter/.dart_tool/
+trinetra_flutter/android/.gradle/
+trinetra_flutter/android/app/build/
+trinetra_flutter/.flutter-plugins
+trinetra_flutter/.flutter-plugins-dependencies

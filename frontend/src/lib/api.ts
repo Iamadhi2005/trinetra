@@ -1,4 +1,12 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://trinetra-ya1h.onrender.com/api";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://trinetra-ya1h.onrender.com/api";
+
+export function getWsUrl(path: string): string {
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const base = (process.env.NEXT_PUBLIC_API_URL || "https://trinetra-ya1h.onrender.com").replace(/\/api\/?$/, "");
+  const wsProto = base.startsWith("https") ? "wss://" : "ws://";
+  const cleanHost = base.replace(/^https?:\/\//, "");
+  return `${wsProto}${cleanHost}${cleanPath}`;
+}
 
 export function getAuthToken(): string | null {
   if (typeof window !== "undefined") {
