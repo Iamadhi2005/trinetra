@@ -20,10 +20,10 @@ class AlarmSoundService {
           ),
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.playback,
-            options: [
+            options: const {
               AVAudioSessionOptions.duckOthers,
               AVAudioSessionOptions.defaultToSpeaker,
-            ],
+            },
           ),
         ),
       );
