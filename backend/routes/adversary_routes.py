@@ -141,71 +141,93 @@ def adversary_connect(
     current_user=Depends(require_role(["Admin", "Operator"])),
     db: Session = Depends(get_db),
 ):
-    """
-    Validates that the caller has Admin/Operator privileges.
-    Returns available targets, scenario catalogue, IPS rule snapshot,
-    and current system mode. Called explicitly by the Attacker Hub UI.
-    """
-    patients = db.query(Patient).all()
-    devices = db.query(Device).all()
-    ips_rules = []
     try:
-        from backend.models import IPSRule
-        ips_rules = [
-            {"id": r.id, "name": r.name, "enabled": r.enabled, "threshold": r.threshold}
-            for r in db.query(IPSRule).all()
-        ]
-    except Exception:
-        pass
+        patients = db.query(Patient).all()
+        devices = db.query(Device).all()
+        ips_rules = []
+        try:
+            from backend.models import IPSRule
+            ips_rules = [
+                {"id": r.id, "name": r.name, "enabled": r.enabled, "threshold": r.threshold}
+                for r in db.query(IPSRule).all()
+            ]
+        except Exception:
+            pass
 
-    model_status = {
-        "layer1_isolation_forest": global_simulator_service.ids.model_l1 is not None,
-        "layer2_random_forest": global_simulator_service.ids.model_l2 is not None,
-        "cusum": True,
-    }
+        l1_loaded = False
+        l2_loaded = False
+        try:
+            l1_loaded = global_simulator_service.ids.model_l1 is not None
+            l2_loaded = global_simulator_service.ids.model_l2 is not None
+        except Exception:
+            pass
 
-    audit = AuditLog(
-        username=current_user.username,
-        action="ADVERSARY_CONSOLE_CONNECT",
-        target="TRINETRA Lab Environment",
-        severity="Info",
-        result="Success",
-    )
-    db.add(audit)
-    db.commit()
+        model_status = {
+            "layer1_isolation_forest": l1_loaded,
+            "layer2_random_forest": l2_loaded,
+            "cusum": True,
+        }
 
-    return {
-        "status": "connected",
-        "operator": {"username": current_user.username, "role": current_user.role, "name": current_user.name},
-        "environment": {
-            "name": "TRINETRA Lab",
-            "backend_version": "2.0.0",
-            "api_base": "/api",
-            "ws_telemetry": "/ws/telemetry/{patient_id}",
-            "ws_events": "/ws/adversary/events",
-        },
-        "targets": [
-            {
+        try:
+            audit = AuditLog(
+                username=current_user.username,
+                action="ADVERSARY_CONSOLE_CONNECT",
+                target="TRINETRA Lab Environment",
+                severity="Info",
+                result="Success",
+            )
+            db.add(audit)
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        targets = []
+        for p in patients:
+            targets.append({
                 "patient_id": p.id,
                 "patient_name": p.name,
-                "ward": p.ward_number,
-                "bed": p.bed_number,
-                "status": p.status,
-                "is_calibrated": p.is_calibrated,
+                "ward": getattr(p, "ward_number", "ICU-A"),
+                "bed": getattr(p, "bed_number", "Bed-01"),
+                "status": getattr(p, "status", "Normal"),
+                "is_calibrated": getattr(p, "is_calibrated", True),
                 "devices": [
                     {"device_id": d.id, "name": d.name, "type": d.type, "status": d.status}
                     for d in devices
                     if d.patient_id == p.id
                 ],
-            }
-            for p in patients
-        ],
-        "scenarios": SUPPORTED_SCENARIOS,
-        "model_status": model_status,
-        "ips_rules": ips_rules,
-        "system_mode": global_simulator_service.get_system_mode(),
-        "connected_at": datetime.datetime.utcnow().isoformat() + "Z",
-    }
+            })
+
+        system_mode = "standard"
+        try:
+            system_mode = global_simulator_service.get_system_mode()
+        except Exception:
+            pass
+
+        return {
+            "status": "connected",
+            "operator": {
+                "username": current_user.username,
+                "role": current_user.role,
+                "name": getattr(current_user, "name", current_user.username) or current_user.username,
+            },
+            "environment": {
+                "name": "TRINETRA Lab",
+                "backend_version": "2.0.0",
+                "api_base": "/api",
+                "ws_telemetry": "/ws/telemetry/{patient_id}",
+                "ws_events": "/ws/adversary/events",
+            },
+            "targets": targets,
+            "scenarios": SUPPORTED_SCENARIOS,
+            "model_status": model_status,
+            "ips_rules": ips_rules,
+            "system_mode": system_mode,
+            "connected_at": datetime.datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Adversary connect failed: {str(exc)}")
 
 
 @router.post("/session/disconnect")
