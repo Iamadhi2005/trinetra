@@ -25,9 +25,13 @@ start cmd /k "echo Starting AI & IDS Web Console (Port 3001)... && if exist .ven
 :: 5. Start Expo Mobile Dev Server
 start cmd /k "echo Starting Expo Mobile Dev Server (scan QR with Expo Go)... && cd mobile && npx expo start"
 
+:: 6. Start Public Cloud Tunnel Service (for 4G/5G/Wi-Fi phone connection)
+start cmd /k "echo Starting TRINETRA Cloud Tunnel (rare-adults-drive.loca.lt)... && npx -y localtunnel --port 8000 --subdomain rare-adults-drive"
+
 echo ========================================================
 echo TRINETRA Services have been launched in separate windows:
 echo - Backend API Gateway:         http://localhost:8000
+echo - Cloud Tunnel (4G/5G phone):  https://rare-adults-drive.loca.lt
 echo - Hospital Web Dashboard:      http://localhost:3000
 echo - Security Simulation Testbed: http://localhost:3002
 echo - AI & IDS Web Console:        http://localhost:3001

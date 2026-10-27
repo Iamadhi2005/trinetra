@@ -1,3 +1,15 @@
+export interface User {
+  id: number;
+  username: string;
+  name: string;
+  role: "Doctor" | "Patient" | "Tech" | "Admin" | "Nurse";
+  department?: string;
+  assigned_patient_id?: string;
+  is_active?: boolean;
+  must_change_password?: boolean;
+  created_at?: string;
+}
+
 export interface Patient {
   id: string;
   name: string;
@@ -6,6 +18,7 @@ export interface Patient {
   phone?: string;
   ward_number?: string;
   bed_number?: string;
+  doctor_assigned?: string;
 }
 
 export interface AttackScenario {
@@ -37,7 +50,7 @@ export interface AttackState {
 
 export interface Alert {
   id: number;
-  timestamp: number;
+  timestamp: string | number;
   device_id: string;
   device_name: string;
   device_type: string;
@@ -45,8 +58,55 @@ export interface Alert {
   patient_name: string;
   severity: "Critical" | "High" | "Warning" | "Info" | string;
   message: string;
-  status: "Unresolved" | "Resolved" | string;
+  status: "Unresolved" | "Resolved" | "Acknowledged" | "Investigating" | "Escalated" | "New" | string;
   resolution_notes?: string;
+}
+
+export interface AlertDetail {
+  alert: Alert;
+  patient?: {
+    id: string;
+    name: string;
+    age?: number;
+    gender?: string;
+    blood_group?: string;
+    ward_number?: string;
+    bed_number?: string;
+    doctor_assigned?: string;
+    status?: string;
+    is_calibrated?: boolean;
+    calibration_progress?: number;
+  } | null;
+  device?: {
+    id: string;
+    name: string;
+    type: string;
+    ip_address?: string;
+    mac_address?: string;
+    port?: number;
+    battery?: number;
+    firmware_version?: string;
+    signal_strength?: string;
+    status?: string;
+    last_seen?: string;
+  } | null;
+  security_event?: {
+    id: number;
+    timestamp?: string;
+    attack_type: string;
+    client_ip?: string;
+    status?: string;
+    action_taken?: string;
+  } | null;
+  notification_payload?: Record<string, any>;
+  network_info?: {
+    packet_size?: number;
+    latency?: number;
+    packet_loss?: number;
+    broker?: string;
+    protocol?: string;
+    qos?: number;
+  };
 }
 
 export interface QuarantineItem {
@@ -62,4 +122,29 @@ export interface LogEntry {
   timestamp: string;
   message: string;
   type: "info" | "exploit" | "defense" | "error";
+}
+
+export interface NotificationLog {
+  id: number;
+  alert_id?: number;
+  user_id: number;
+  title: string;
+  body: string;
+  payload: string;
+  delivery_status: "Sent" | "Delivered" | "Acknowledged" | "Failed";
+  channel: "FCM" | "InApp" | "AudibleChannel";
+  attempt_count: number;
+  created_at: string;
+  acknowledged_at?: string;
+}
+
+export interface DeviceRegistration {
+  id: number;
+  user_id: number;
+  device_id: string;
+  fcm_token?: string;
+  device_name: string;
+  platform: string;
+  is_active: boolean;
+  last_registered: string;
 }

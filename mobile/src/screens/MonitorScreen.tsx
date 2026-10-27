@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Platform,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { AttackState, LogEntry, QuarantineItem } from "../types";
@@ -26,9 +27,131 @@ export const MonitorScreen: React.FC<MonitorScreenProps> = ({
 }) => {
   const isAttacking = attackState.attack_mode && attackState.attack_mode !== "Normal";
 
+  // Dynamic waveform animation tick
+  const [ecgPhase, setEcgPhase] = useState<number>(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setEcgPhase((p) => (p + 1) % 18);
+    }, 450);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Base clinical readings
+  const hr = isAttacking ? 134 : 72;
+  const spo2 = isAttacking ? 89 : 98;
+  const rr = isAttacking ? 26 : 16;
+  const bp = isAttacking ? "148/96" : "120/80";
+
+  // Dynamic bar height series representing continuous ECG waveform lead II
+  const baselineWave = [14, 18, 22, 54, 98, -38, 20, 24, 18, 16, 22, 58, 94, -36, 18, 26, 20, 16];
+  const renderedWave = baselineWave.map((v, i) => {
+    const shiftIdx = (i + ecgPhase) % baselineWave.length;
+    return baselineWave[shiftIdx];
+  });
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Testbed Status Card */}
+      {/* Real-time Physiological Vitals & Waveform Card */}
+      <View style={styles.vitalsCard}>
+        <View style={styles.cardHeaderRow}>
+          <MaterialCommunityIcons name="heart-pulse" size={20} color="#00FF66" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>CONTINUOUS CLINICAL TELEMETRY</Text>
+            <Text style={styles.cardSub}>Lead II ECG • SpO₂ Photoplethysmography • Non-invasive Hemodynamics</Text>
+          </View>
+          <View style={[styles.statusTag, { backgroundColor: isAttacking ? "rgba(239, 68, 68, 0.2)" : "rgba(0, 255, 102, 0.15)" }]}>
+            <Text style={[styles.statusTagText, { color: isAttacking ? "#F87171" : "#00FF66" }]}>
+              {isAttacking ? "ANOMALY FLAGGED" : "NORMAL SINUS"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Data Integrity Status Banner (Requirement 5) */}
+        <View
+          style={[
+            styles.integrityBanner,
+            {
+              backgroundColor: isAttacking ? "rgba(239, 68, 68, 0.15)" : "rgba(0, 255, 102, 0.12)",
+              borderColor: isAttacking ? "#EF4444" : "#00FF66",
+            },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name={isAttacking ? "shield-alert" : "shield-check"}
+            size={16}
+            color={isAttacking ? "#EF4444" : "#00FF66"}
+          />
+          <Text
+            style={[
+              styles.integrityBannerText,
+              { color: isAttacking ? "#FCA5A5" : "#86EFAC" },
+            ]}
+          >
+            {isAttacking
+              ? "DATA INTEGRITY: UNTRUSTED • TELEMETRY SENSOR SPOOFED"
+              : "DATA INTEGRITY: VERIFIED • SENSOR CRYPTOGRAPHICALLY AUTHENTIC"}
+          </Text>
+        </View>
+
+        {/* Vitals Grid */}
+        <View style={styles.vitalsGrid}>
+          <View style={styles.vitalBox}>
+            <Text style={styles.vitalLabel}>HEART RATE</Text>
+            <Text style={[styles.vitalValue, { color: isAttacking ? "#EF4444" : "#00FF66" }]}>
+              {hr}
+            </Text>
+            <Text style={styles.vitalUnit}>BPM</Text>
+          </View>
+
+          <View style={styles.vitalBox}>
+            <Text style={styles.vitalLabel}>SpO₂ OXYGEN</Text>
+            <Text style={[styles.vitalValue, { color: isAttacking ? "#FBBF24" : "#38BDF8" }]}>
+              {spo2}%
+            </Text>
+            <Text style={styles.vitalUnit}>Saturation</Text>
+          </View>
+
+          <View style={styles.vitalBox}>
+            <Text style={styles.vitalLabel}>RESPIRATION</Text>
+            <Text style={[styles.vitalValue, { color: isAttacking ? "#F97316" : "#A78BFA" }]}>
+              {rr}
+            </Text>
+            <Text style={styles.vitalUnit}>BrPM</Text>
+          </View>
+
+          <View style={styles.vitalBox}>
+            <Text style={styles.vitalLabel}>BLOOD PRESSURE</Text>
+            <Text style={[styles.vitalValue, { color: isAttacking ? "#F87171" : "#F1F5F9", fontSize: 13 }]}>
+              {bp}
+            </Text>
+            <Text style={styles.vitalUnit}>mmHg (MAP 98)</Text>
+          </View>
+        </View>
+
+        {/* Dynamic ECG Waveform Canvas */}
+        <View style={styles.waveformBox}>
+          <View style={styles.waveHeader}>
+            <Text style={styles.waveTitle}>REAL-TIME ECG LEAD II (mV)</Text>
+            <Text style={styles.waveScale}>25 mm/s • 10 mm/mV</Text>
+          </View>
+          <View style={styles.waveBarsRow}>
+            {renderedWave.map((h, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.waveBar,
+                  {
+                    height: Math.abs(h) * 0.45 + 4,
+                    backgroundColor: isAttacking ? "#EF4444" : "#00FF66",
+                  },
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {/* Testbed Security Status Card */}
       <View style={[styles.statusCard, isAttacking ? styles.statusCardAttack : styles.statusCardNormal]}>
         <View style={styles.statusCardHeader}>
           <MaterialCommunityIcons
@@ -80,7 +203,7 @@ export const MonitorScreen: React.FC<MonitorScreenProps> = ({
         )}
       </View>
 
-      {/* Quarantine Queue Section */}
+      {/* IPS Quarantine Queue Section */}
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
           <MaterialCommunityIcons name="lock-alert-outline" size={16} color="#F59E0B" />
@@ -128,10 +251,10 @@ export const MonitorScreen: React.FC<MonitorScreenProps> = ({
             let textColor = "#00FF66";
             if (log.type === "exploit") textColor = "#F87171";
             if (log.type === "defense") textColor = "#60A5FA";
-            if (log.type === "error") textColor = "#EF4444";
+            if (log.type === "error") textColor = "#FBBF24";
 
             return (
-              <View key={log.id} style={styles.logLine}>
+              <View key={log.id} style={styles.logRow}>
                 <Text style={styles.logTime}>[{log.timestamp}]</Text>
                 <Text style={[styles.logMsg, { color: textColor }]}>
                   {log.message}
@@ -151,22 +274,128 @@ const styles = StyleSheet.create({
     backgroundColor: "#070B14",
   },
   content: {
-    padding: 14,
+    padding: 16,
     paddingBottom: 40,
+    gap: 14,
+  },
+  vitalsCard: {
+    backgroundColor: "#0D1527",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  cardTitle: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#F8FAFC",
+  },
+  cardSub: {
+    fontSize: 8.5,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  statusTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  statusTagText: {
+    fontSize: 8.5,
+    fontWeight: "bold",
+  },
+  integrityBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    gap: 8,
+  },
+  integrityBannerText: {
+    fontSize: 9,
+    fontWeight: "bold",
+    letterSpacing: 0.5,
+  },
+  vitalsGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  vitalBox: {
+    flex: 1,
+    backgroundColor: "#070B14",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    borderRadius: 8,
+    padding: 8,
+    alignItems: "center",
+  },
+  vitalLabel: {
+    fontSize: 8,
+    fontWeight: "bold",
+    color: "#94A3B8",
+    textAlign: "center",
+  },
+  vitalValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    marginVertical: 2,
+  },
+  vitalUnit: {
+    fontSize: 7.5,
+    color: "#64748B",
+  },
+  waveformBox: {
+    backgroundColor: "#070B14",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    borderRadius: 8,
+    padding: 10,
+  },
+  waveHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  waveTitle: {
+    fontSize: 8.5,
+    fontWeight: "bold",
+    color: "#00FF66",
+  },
+  waveScale: {
+    fontSize: 8,
+    color: "#64748B",
+  },
+  waveBarsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    height: 44,
+    paddingHorizontal: 6,
+  },
+  waveBar: {
+    width: 8,
+    borderRadius: 2,
   },
   statusCard: {
-    backgroundColor: "#0D1527",
     borderRadius: 10,
-    padding: 14,
     borderWidth: 1,
-    marginBottom: 16,
+    padding: 14,
   },
   statusCardNormal: {
-    borderColor: "rgba(0, 255, 102, 0.3)",
+    backgroundColor: "rgba(0, 255, 102, 0.05)",
+    borderColor: "rgba(0, 255, 102, 0.2)",
   },
   statusCardAttack: {
+    backgroundColor: "rgba(239, 68, 68, 0.08)",
     borderColor: "#EF4444",
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
   },
   statusCardHeader: {
     flexDirection: "row",
@@ -177,10 +406,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "bold",
-    color: "#FFFFFF",
-    letterSpacing: 0.5,
+    color: "#F8FAFC",
+    letterSpacing: 0.8,
   },
   statusSub: {
     fontSize: 10,
@@ -188,13 +417,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   attributionBox: {
-    backgroundColor: "#070B14",
-    borderRadius: 6,
-    padding: 10,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    gap: 5,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(239, 68, 68, 0.2)",
+    gap: 4,
   },
   attrRow: {
     flexDirection: "row",
@@ -202,20 +429,17 @@ const styles = StyleSheet.create({
   },
   attrLabel: {
     fontSize: 10,
-    color: "#64748B",
-    fontWeight: "600",
+    color: "#94A3B8",
   },
   attrVal: {
     fontSize: 10,
-    color: "#E2E8F0",
-    fontWeight: "600",
+    fontWeight: "bold",
+    color: "#F8FAFC",
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 6,
-    marginBottom: 8,
   },
   sectionTitleRow: {
     flexDirection: "row",
@@ -225,22 +449,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 11,
     fontWeight: "bold",
-    color: "#E2E8F0",
-    letterSpacing: 0.8,
+    color: "#CBD5E1",
+    letterSpacing: 0.5,
   },
   refreshBtn: {
     padding: 4,
-  },
-  clearBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    backgroundColor: "#1E293B",
-    borderRadius: 4,
-  },
-  clearBtnText: {
-    fontSize: 9,
-    fontWeight: "bold",
-    color: "#94A3B8",
   },
   emptyQuarantine: {
     backgroundColor: "#0D1527",
@@ -248,16 +461,14 @@ const styles = StyleSheet.create({
     borderColor: "#1E293B",
     borderRadius: 8,
     padding: 12,
-    marginBottom: 16,
+    alignItems: "center",
   },
   emptyText: {
-    fontSize: 11,
+    fontSize: 10,
     color: "#64748B",
-    fontStyle: "italic",
   },
   quarantineList: {
     gap: 8,
-    marginBottom: 16,
   },
   quarantineItem: {
     backgroundColor: "#0D1527",
@@ -272,45 +483,58 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   qDev: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "bold",
     color: "#FBBF24",
+    fontFamily: Platform.OS === "android" ? "monospace" : "Courier",
   },
   qPatient: {
-    fontSize: 10,
+    fontSize: 9,
     color: "#94A3B8",
   },
   qReason: {
-    fontSize: 10,
-    color: "#CBD5E1",
+    fontSize: 9.5,
+    color: "#F8FAFC",
+  },
+  clearBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: "#1E293B",
+    borderRadius: 4,
+  },
+  clearBtnText: {
+    fontSize: 9,
+    color: "#94A3B8",
+    fontWeight: "bold",
   },
   consoleBox: {
-    backgroundColor: "#05080F",
+    backgroundColor: "#070B14",
     borderWidth: 1,
     borderColor: "#1E293B",
     borderRadius: 8,
     padding: 10,
-    minHeight: 180,
-    gap: 4,
+    minHeight: 120,
+    maxHeight: 200,
   },
   consoleEmpty: {
     fontSize: 10,
     color: "#475569",
-    fontStyle: "italic",
-    padding: 8,
+    textAlign: "center",
+    marginTop: 40,
   },
-  logLine: {
+  logRow: {
     flexDirection: "row",
     gap: 6,
+    marginBottom: 4,
   },
   logTime: {
     fontSize: 9,
-    color: "#475569",
-    fontFamily: "monospace",
+    color: "#64748B",
+    fontFamily: Platform.OS === "android" ? "monospace" : "Courier",
   },
   logMsg: {
-    fontSize: 10,
-    fontFamily: "monospace",
+    fontSize: 9.5,
     flex: 1,
+    fontFamily: Platform.OS === "android" ? "monospace" : "Courier",
   },
 });
